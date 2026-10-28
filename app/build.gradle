@@ -12,6 +12,8 @@ if (localBuildOptionsFile.asFile.exists()) {
 }
 def pythonExecutable = project.findProperty('pythonExecutable')
     ?: localBuildOptions.getProperty('droiddeck.python', 'python3')
+def droiddeckAbi = (project.findProperty('droiddeckAbi') ?: localBuildOptions.getProperty('droiddeck.abi', 'arm64-v8a')).toString()
+if (!(droiddeckAbi in ['arm64-v8a', 'x86_64'])) throw new GradleException("Unsupported droiddeckAbi: ${droiddeckAbi}")
 def vitureSdkDir = project.hasProperty('vitureSdkDir') ? project.property('vitureSdkDir') : localBuildOptions.getProperty('droiddeck.vitureSdk', '')
 def uvcDir = project.hasProperty('uvcDir') ? project.property('uvcDir') : localBuildOptions.getProperty('droiddeck.uvcDir', '')
 if (uvcDir) {
@@ -149,8 +151,10 @@ android {
             buildConfigField "long", "PACK_${name.toUpperCase()}_SIZE", "${pack.size}L"
         }
 
+        // The Googlebook x86_64 build installs beside upstream's arm64 app.
+        if (droiddeckAbi == 'x86_64') applicationIdSuffix '.googlebook'
         ndk {
-            abiFilters 'arm64-v8a'
+            abiFilters droiddeckAbi
         }
         externalNativeBuild {
             cmake {
@@ -290,6 +294,8 @@ def verifyRuntimeInputs = tasks.register('verifyRuntimeInputs', Exec) {
     mustRunAfter(stageSessionScripts, stageRuntimeAssets)
     workingDir rootProject.projectDir
     commandLine pythonExecutable, 'tools/release/runtime_inputs.py', 'verify'
+    // tools/build_local.sh prepares arm64 runtime inputs only; the x86_64 runtime has no recorded inputs yet.
+    onlyIf { droiddeckAbi == 'arm64-v8a' }
 }
 tasks.configureEach { task ->
     if (task.name in ['packageDebug', 'packageRelease']) task.dependsOn(verifyRuntimeInputs)
@@ -318,7 +324,7 @@ def buildRustStores = tasks.register('buildRustStores', Exec) {
     if (!skipRust) environment 'RUSTC', providers.exec {
         commandLine 'rustup', 'which', '--toolchain', 'stable', 'rustc'
     }.standardOutput.asText.get().trim()
-    commandLine 'rustup', 'run', 'stable', 'cargo', 'ndk', '--target', 'arm64-v8a', '--platform', '26',
+    commandLine 'rustup', 'run', 'stable', 'cargo', 'ndk', '--target', droiddeckAbi, '--platform', '26',
         '--output-dir', rustJniLibsDir.get().asFile.absolutePath,
         'build', '--release', '--locked'
 }

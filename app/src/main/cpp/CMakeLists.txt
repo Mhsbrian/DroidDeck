@@ -6,7 +6,9 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wno-unused-function -Wimplicit-function
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
 
-add_subdirectory(adrenotools)
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    add_subdirectory(adrenotools)
+endif()
 
 # DXVK's DXBC->SPIR-V translator is zlib licensed (vendored under thirdparty/dxbc).
 add_subdirectory(thirdparty/dxbc)

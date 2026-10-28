@@ -4,7 +4,7 @@ This fork runs DroidDeck natively on x86_64 Googlebook laptops: Android-based la
 Radeon graphics and, on some models, an NVIDIA GPU. Upstream DroidDeck targets Adreno phones and handhelds
 and is arm64-only. This page records the design, the milestones and what has been measured.
 
-Status: 2026-10-28, milestone 0 (feasibility) done. **The app does not build for x86_64 yet.**
+Status: 2026-10-28. Milestone 0 (feasibility) is done. Milestone 1 is partly done: an x86_64 debug APK builds, installs and starts on the reference laptop. It cannot start a session yet, because there is no x86_64 runtime (milestone 2).
 
 Labels: **CONFIRMED** = measured on the reference laptop; **HYPOTHESIS** = not tested yet.
 
@@ -55,13 +55,42 @@ NVIDIA's Linux driver is not part of this repository. It must match the device's
 | # | Milestone | Done when | State |
 | --- | --- | --- | --- |
 | 0 | Feasibility on the device | native proot runs an x86_64 glibc system; both GPUs render inside it | **done** (below) |
-| 1 | x86_64 APK | `assembleRelease` makes an x86_64 APK; it installs and its front end opens | next |
-| 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64 | |
+| 1 | x86_64 APK | `assembleRelease` makes an x86_64 APK; it installs and its front end opens | **partly done** (below): debug APK builds, installs and starts; not yet seen on screen; no PulseAudio or store engines yet |
+| 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64; the app downloads it, and the x86_64 proot pack, instead of upstream's arm64 ones | next |
 | 3 | Steam on the Radeon | Steam Big Picture appears through the app's compositor on the Radeon | |
-| 4 | Controllers | an Xbox-style and a DualSense controller work in Steam Input, including rumble; keyboard, mouse and touch work | |
+| 4 | Controllers | Steam Input sees the controllers Steam supports as Steam sees them on SteamOS: buttons, rumble, and gyro and touchpad where the controller has them. Xbox, DualSense and 8BitDo controllers also work in emulators and other non-Steam apps. Keyboard, mouse and touch work | |
 | 5 | Games on the Radeon | a Proton game and a native Linux game run; fps recorded | |
 | 6 | Games on the NVIDIA GPU | the same games render on NVIDIA's driver and appear on screen; fps compared with the Radeon; the NVIDIA GPU powers down after the game exits | |
 | 7 | Speed and polish | x86_64 proot fast path; driver choice per game; first-run setup without developer options | |
+
+## Milestone 1: building the x86_64 APK
+
+```sh
+# once per ABI: libffi and libwayland-server for the compositor (Docker, NDK)
+NDK=... DROIDDECK_ABI=x86_64 tools/googlebook/build-wayland-server.sh app/src/main/jniLibs/x86_64
+# the APK (JDK 17)
+./gradlew -PdroiddeckAbi=x86_64 -PskipRust=true -PndkVersion=<installed NDK> :app:assembleDebug
+# sign with your own key; Play Protect rejects the AOSP testkey
+GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-apk.sh \
+  app/build/outputs/apk/debug/app-debug.apk droiddeck-googlebook-x86_64.apk
+```
+
+- **`droiddeckAbi`** (Gradle property, or `droiddeck.abi` in `local.properties`):
+  - `arm64-v8a` (the default) builds exactly what upstream builds.
+  - `x86_64` builds the Googlebook app, `com.droiddeck.launcher.googlebook`, which installs beside upstream's app.
+- **adrenotools** (Turnip loading) is built and linked only for arm64. On x86_64 the compositor uses the system Vulkan driver.
+- **`verifyRuntimeInputs`** still runs for arm64. It is skipped for x86_64 until milestone 2 records x86_64 runtime inputs.
+- **Results (2026-10-28, reference laptop):**
+  - The APK holds only `lib/x86_64` and is 61 MB.
+  - With the AOSP testkey, Play Protect refused the install ("Install not allowed", verdict 3).
+  - Re-signed with our key, it installed. The process started, the front-end activity was created, and every native library loaded except the store engines (left out with `-PskipRust`). There were no crashes.
+  - The laptop's screen was off, so no frame was drawn. Seeing it on screen is still open.
+- **Still missing for x86_64:**
+  - PulseAudio and its modules (needed for sound, milestone 3);
+  - the DirectAudio relay;
+  - the Rust store engines (`cargo-ndk` target `x86_64-linux-android`);
+  - an x86_64 proot pack and runtime catalog. The app still asks upstream's catalogs for the arm64 runtime, FEX and arm64 Proton (milestone 2).
+- **Labels.** The app is still called "DroidDeck", the same as upstream's. A distinct label comes with packaging (milestone 7).
 
 ## Milestone 0: what was measured
 

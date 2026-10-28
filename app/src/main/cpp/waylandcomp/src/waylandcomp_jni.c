@@ -660,7 +660,9 @@ Java_com_droiddeck_launcher_wayland_WaylandCompositor_nativeTextInputDelete(JNIE
     droiddeck_host_text_delete(before, after);
 }
 
+#ifdef DROIDDECK_ADRENOTOOLS
 extern void adrenotools_set_turbo(bool turbo);
+#endif
 JNIEXPORT void JNICALL
 Java_com_droiddeck_launcher_wayland_WaylandCompositor_nativeSetGpuTurbo(JNIEnv *env, jclass clazz, jboolean on) {
     (void)clazz;
@@ -670,7 +672,9 @@ Java_com_droiddeck_launcher_wayland_WaylandCompositor_nativeSetGpuTurbo(JNIEnv *
         if (error) (*env)->ThrowNew(env, error, strerror(saved_errno));
     }
     // Clear a legacy global pin when recovering its marker after an app upgrade or crash.
+#ifdef DROIDDECK_ADRENOTOOLS
     if (on != JNI_TRUE) adrenotools_set_turbo(false);
+#endif
 }
 
 JNIEXPORT jint JNICALL

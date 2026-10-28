@@ -87,11 +87,18 @@ else()
     target_sources(droiddeckwayland PRIVATE src/framegen_engine_stub.c)
 endif()
 add_library(wayland-server SHARED IMPORTED)
-set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
-        ${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/lib/libwayland-server.so)
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
+            ${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/lib/libwayland-server.so)
+    target_compile_definitions(droiddeckwayland PRIVATE DROIDDECK_ADRENOTOOLS=1)
+    target_link_libraries(droiddeckwayland adrenotools)
+else()
+    # Built by tools/googlebook/build-wayland-server.sh.
+    set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../jniLibs/${ANDROID_ABI}/libwayland-server.so)
+endif()
 target_link_libraries(droiddeckwayland
         wayland-server
-        adrenotools
         dl
         log
         android

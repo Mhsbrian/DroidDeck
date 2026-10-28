@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
 #include "vk_loader.h"
+#ifdef DROIDDECK_ADRENOTOOLS
 #include "../../adrenotools/include/adrenotools/driver.h"
+#endif
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +17,7 @@ static PFN_vkGetInstanceProcAddr g_gip;
 
 int vk_loader_open(const char *driver_path, const char *library_name,
                    const char *native_lib_dir) {
+#ifdef DROIDDECK_ADRENOTOOLS
     if (driver_path && library_name && native_lib_dir) {
         char *tmpdir = NULL;
         if (asprintf(&tmpdir, "%stemp", driver_path) < 0) tmpdir = NULL;
@@ -27,6 +30,9 @@ int vk_loader_open(const char *driver_path, const char *library_name,
                             "adrenotools Turnip handle=%p (%s / %s)", g_handle,
                             driver_path, library_name);
     }
+#else
+    (void)driver_path; (void)library_name; (void)native_lib_dir;
+#endif
     if (!g_handle) {
         g_handle = dlopen("libvulkan.so", RTLD_LOCAL | RTLD_NOW);
         __android_log_print(ANDROID_LOG_WARN, TAG,
