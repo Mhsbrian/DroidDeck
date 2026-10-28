@@ -1,5 +1,6 @@
 package com.droiddeck.launcher.runtime;
 
+import com.droiddeck.launcher.core.DeviceSupport;
 import com.droiddeck.launcher.core.AddonPack;
 import android.content.Context;
 import android.util.Log;
@@ -88,8 +89,25 @@ public final class LinuxRuntimeInstaller {
         return v == null ? null : v.trim();
     }
 
+    /** The x86_64 runtime is not published yet; its catalog is a local file whose url may name a file beside it. */
+    static final String LOCAL_CATALOG = "droiddeck-runtime-x86_64.json";
+
+    public static Release fetchRelease(Context context) {
+        if (!DeviceSupport.nativeX86()) return fetchRelease();
+        File dir = context.getExternalFilesDir(null);
+        File catalog = dir == null ? null : new File(dir, LOCAL_CATALOG);
+        String body = catalog != null && catalog.isFile() ? FileUtils.readString(catalog) : null;
+        Release release = parseRelease(body);
+        if (release == null || release.url.contains("://")) return release;
+        File archive = new File(release.url.startsWith("/") ? release.url : new File(dir, release.url).getPath());
+        return new Release(release.version, "file://" + archive.getPath(), release.sha256, release.size);
+    }
+
     public static Release fetchRelease() {
-        String body = Downloader.downloadString(CATALOG_URL);
+        return parseRelease(Downloader.downloadString(CATALOG_URL));
+    }
+
+    private static Release parseRelease(String body) {
         if (body == null || body.isEmpty()) return null;
         try {
             JSONObject json = new JSONObject(body);
@@ -263,16 +281,24 @@ public final class LinuxRuntimeInstaller {
             emptyTrash(LinuxRuntime.rootDir(context).getParentFile());
             String downloading = context.getString(R.string.rtinst_downloading);
             if (listener != null) listener.onProgress(Step.DOWNLOADING, downloading, 0);
-            if (!LinuxRuntime.patchedProot(context) && !AddonPack.PROOT.await(context)
+            boolean x86 = DeviceSupport.nativeX86();
+            if (!x86 && !LinuxRuntime.patchedProot(context) && !AddonPack.PROOT.await(context)
                     && !SessionPrefs.allowStockProot(context))
                 throw new IOException("Cannot download proot");
-            if (!AddonPack.DIRECTAUDIO.await(context)) throw new IOException("Cannot download DirectAudio");
-            boolean ok = Downloader.downloadFile(release.url, archive, true, release.sha256, (fraction) -> {
-                if (listener != null) {
-                    listener.onProgress(Step.DOWNLOADING, downloading,
-                            fraction < 0 ? -1 : Math.round(fraction * 100f));
-                }
-            });
+            if (!x86 && !AddonPack.DIRECTAUDIO.await(context)) throw new IOException("Cannot download DirectAudio");
+            boolean ok;
+            if (release.url.startsWith("file://")) {
+                File local = new File(release.url.substring("file://".length()));
+                ok = local.isFile();
+                if (ok) java.nio.file.Files.copy(local.toPath(), archive.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                ok = Downloader.downloadFile(release.url, archive, true, release.sha256, (fraction) -> {
+                    if (listener != null) {
+                        listener.onProgress(Step.DOWNLOADING, downloading,
+                                fraction < 0 ? -1 : Math.round(fraction * 100f));
+                    }
+                });
+            }
             if (!ok) {
                 Log.w(TAG, "download failed");
                 keepPartial = true;

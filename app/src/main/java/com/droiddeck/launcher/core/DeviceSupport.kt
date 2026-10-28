@@ -6,6 +6,10 @@ import com.droiddeck.launcher.R
 import java.io.File
 
 object DeviceSupport {
+    /** The Googlebook build: x86_64 code, its own runtime and proot, no Adreno or ARM-only downloads. */
+    @JvmStatic
+    fun nativeX86(): Boolean = com.droiddeck.launcher.BuildConfig.NATIVE_ABI == "x86_64"
+
     fun adreno(): Boolean =
         File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists()
 

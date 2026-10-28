@@ -1,6 +1,7 @@
 package com.droiddeck.launcher.runtime;
 
 import com.droiddeck.launcher.core.AddonPack;
+import com.droiddeck.launcher.core.DeviceSupport;
 import android.content.Context;
 import android.os.Process;
 import android.system.ErrnoException;
@@ -77,22 +78,36 @@ public final class LinuxRuntime {
         return new File(rootDir(context), HOST_DIR + "/loader");
     }
 
+    private static File rootfsLoader32(Context context) {
+        return new File(rootDir(context), HOST_DIR + "/loader32");
+    }
+
+    /** proot's loader for i386 programs, shipped only in the x86_64 runtime. */
+    public static File prootLoader32(Context context) {
+        File loader = rootfsLoader32(context);
+        return DeviceSupport.nativeX86() && loader.isFile() ? loader : null;
+    }
+
     private static boolean rootfsProotReady(Context context) {
         return rootfsProot(context).isFile() && rootfsLoader(context).isFile();
     }
 
     /** Patched proot is the add-on pack. The rootfs copy is not that binary. */
     public static boolean patchedProot(Context context) {
+        // The x86_64 runtime carries the patched proot built from tools/proot.
+        if (DeviceSupport.nativeX86()) return rootfsProotReady(context);
         return AddonPack.PROOT.installed(context);
     }
 
     public static File prootBinary(Context context) {
+        if (DeviceSupport.nativeX86()) return rootfsProot(context);
         if (AddonPack.PROOT.installed(context)) return AddonPack.PROOT.file(context, "libproot.so");
         if (SessionPrefs.allowStockProot(context)) return rootfsProot(context);
         return AddonPack.PROOT.file(context, "libproot.so");
     }
 
     public static File prootLoader(Context context) {
+        if (DeviceSupport.nativeX86()) return rootfsLoader(context);
         if (AddonPack.PROOT.installed(context)) return AddonPack.PROOT.file(context, "libproot-loader.so");
         if (SessionPrefs.allowStockProot(context)) return rootfsLoader(context);
         return AddonPack.PROOT.file(context, "libproot-loader.so");

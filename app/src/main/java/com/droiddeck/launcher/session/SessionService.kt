@@ -448,7 +448,8 @@ class SessionService : Service() {
         killStragglers()
         val stillStarting = { gen == sessionGen && SessionState.running }
         val prootPack = LinuxRuntime.patchedProot(this) || AddonPack.PROOT.await(this, stillStarting)
-        val directAudioPack = AddonPack.DIRECTAUDIO.await(this, stillStarting)
+        val x86 = com.droiddeck.launcher.core.DeviceSupport.nativeX86()
+        val directAudioPack = x86 || AddonPack.DIRECTAUDIO.await(this, stillStarting)
         if (!stillStarting()) {
             Log.i(TAG, "session stopped while add-on packs were downloading")
             return
@@ -623,6 +624,7 @@ class SessionService : Service() {
         val hostEnv = HostEnvironment()
         hostEnv["PROOT_LOADER"] = LinuxRuntime.prootLoader(this).path
         hostEnv["PROOT_TMP_DIR"] = LinuxRuntime.prootTempDir(this).path
+        LinuxRuntime.prootLoader32(this)?.let { hostEnv["PROOT_LOADER_32"] = it.path }
         if (SessionPrefs.prootNoSeccomp(this)) {
             hostEnv["PROOT_NO_SECCOMP"] = "1"
             Log.i(TAG, "proot: seccomp acceleration off by request")

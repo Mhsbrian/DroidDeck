@@ -61,7 +61,8 @@ class App : Application() {
         val app = this
         Thread({
             runCatching {
-                if (com.droiddeck.launcher.runtime.LinuxRuntime.rootDir(app).isDirectory) {
+                if (com.droiddeck.launcher.runtime.LinuxRuntime.rootDir(app).isDirectory &&
+                    !com.droiddeck.launcher.core.DeviceSupport.nativeX86()) {
                     com.droiddeck.launcher.core.AddonPack.PROOT.ensure(app)
                     com.droiddeck.launcher.core.AddonPack.DIRECTAUDIO.ensure(app)
                 }

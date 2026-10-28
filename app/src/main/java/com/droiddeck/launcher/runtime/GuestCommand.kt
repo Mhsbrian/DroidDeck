@@ -63,6 +63,7 @@ object GuestCommand {
         builder.environment().apply {
             put("PROOT_LOADER", LinuxRuntime.prootLoader(context).path)
             put("PROOT_TMP_DIR", LinuxRuntime.prootTempDir(context).path)
+            LinuxRuntime.prootLoader32(context)?.let { put("PROOT_LOADER_32", it.path) }
             if (linkDir != null) put("PROOT_L2S_DIR", linkDir.path)
             if (SessionPrefs.prootNoSeccomp(context)) put("PROOT_NO_SECCOMP", "1")
             fastPathKey?.let { ProotFastPath.hostEnv(it).let { (k, v) -> put(k, v) } }

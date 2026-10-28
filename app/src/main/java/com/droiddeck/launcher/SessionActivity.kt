@@ -638,7 +638,9 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
             val program = intent.getStringExtra(SessionService.EXTRA_PROGRAM)
             val protonUser = (intent.getStringExtra(SessionService.EXTRA_MODE) ?: SessionService.MODE_STEAM) == SessionService.MODE_STEAM ||
                 program == com.droiddeck.launcher.runtime.BattleNet.PROGRAM || program == com.droiddeck.launcher.session.NoSteamLaunch.PROTON_RUN
-            val needProton = protonUser && com.droiddeck.launcher.runtime.DesktopCatalog.protonSeedNeeded(this)
+            // On x86_64, Steam installs Valve's own Proton; the seed is the ARM64 one.
+            val needProton = protonUser && !com.droiddeck.launcher.core.DeviceSupport.nativeX86() &&
+                com.droiddeck.launcher.runtime.DesktopCatalog.protonSeedNeeded(this)
             if (needRuntime || needResume || needDesktop || needProton) installThenStart(needRuntime, needDesktop, needProton, needResume)
         }
         hud = PerfHud(this)
@@ -1798,7 +1800,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun installRuntime(): String? {
-        val release = com.droiddeck.launcher.runtime.LinuxRuntimeInstaller.fetchRelease()
+        val release = com.droiddeck.launcher.runtime.LinuxRuntimeInstaller.fetchRelease(this)
             ?: return getString(R.string.session_runtime_catalog_unreachable)
         runCatching { com.droiddeck.launcher.runtime.RuntimeInstallService.start(this, release) }
         val ok = com.droiddeck.launcher.runtime.LinuxRuntimeInstaller.install(this, release,

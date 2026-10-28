@@ -2371,7 +2371,8 @@ class FrontEndActivity : ComponentActivity() {
         val artRefreshesAtStart = HashMap(steamArtRefreshes)
         if (shortcutPicker) shortcutLibraryScanning = true
         if (!OfflineMode.enabled(this)) {
-            Thread({ com.droiddeck.launcher.session.FexCatalog.refresh(this) }, "fex-catalog").start()
+            if (!com.droiddeck.launcher.core.DeviceSupport.nativeX86())
+                Thread({ com.droiddeck.launcher.session.FexCatalog.refresh(this) }, "fex-catalog").start()
         }
         Thread({
             val emus = Library.emulators(this) { id -> DesktopCatalog.installed(this, id) != null }
@@ -2454,7 +2455,8 @@ class FrontEndActivity : ComponentActivity() {
             showPhantomGate = true
             return false
         }
-        val warn = installed == null && !com.droiddeck.launcher.core.DeviceSupport.adreno()
+        val warn = installed == null && !com.droiddeck.launcher.core.DeviceSupport.adreno() &&
+            !com.droiddeck.launcher.core.DeviceSupport.nativeX86()
         if (warn && available != null) { showNonAdreno = available; return false }
         startActivity(intent)
         return true
@@ -2555,7 +2557,7 @@ class FrontEndActivity : ComponentActivity() {
     }
 
     private fun checkCatalog() {
-        val release = LinuxRuntimeInstaller.fetchRelease()
+        val release = LinuxRuntimeInstaller.fetchRelease(this)
         Log.i(TAG, "catalog: " + (release?.version ?: "unreachable"))
         ui.post { if (release != null) available = release }
     }
