@@ -29,6 +29,12 @@ if [[ -n ${GAMESCOPE_TZST:-} ]]; then
   zstd -dc "$GAMESCOPE_TZST" | tar -C "$OUT/rootfs" -xf -
   test -x "$OUT/rootfs/usr/local/bin/gamescope"
 fi
+# DroidDeck's session scripts, as upstream's runtime carries its own: the app restages them at every session, but it
+# counts a runtime as installed only when a session script is already there (LinuxRuntime.isInstalled).
+REPO=$(cd "$HERE/../.." && pwd)
+cp -r "$REPO/tools/linuxfs/overlay/usr" "$OUT/rootfs/"
+chmod 755 "$OUT/rootfs/usr/local/bin"/* "$OUT/rootfs/usr/bin"/steamos-* "$OUT/rootfs/usr/bin/jupiter-biosupdate"
+test -x "$OUT/rootfs/usr/local/bin/droiddeck-session"
 # docker export leaves these empty; the app writes resolv.conf from Android's link at each session start.
 printf '127.0.0.1 localhost\n::1 localhost\n' > "$OUT/rootfs/etc/hosts"
 mkdir -p "$OUT/rootfs/opt/android-host"
