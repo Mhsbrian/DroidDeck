@@ -140,8 +140,10 @@ public final class LinuxRuntime {
         File icdDir = new File(rootDir(context), "usr/share/vulkan/icd.d");
         File[] manifests = icdDir.listFiles((dir, name) -> name.endsWith(".json"));
         if (manifests == null) return null;
+        // The x86_64 runtime carries Mesa's drivers for every vendor; Googlebook machines draw on the Radeon.
+        String preferred = DeviceSupport.nativeX86() ? "radeon_icd" : "freedreno";
         for (File manifest : manifests) {
-            if (manifest.getName().contains("freedreno")) return manifest;
+            if (manifest.getName().contains(preferred)) return manifest;
         }
         return manifests.length > 0 ? manifests[0] : null;
     }

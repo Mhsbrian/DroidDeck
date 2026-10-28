@@ -1,0 +1,141 @@
+#!/bin/bash
+# Valve's x86-64 (steamrt64) Steam client on an x86_64 device, without FEX: droiddeck-steam-x64's install, update and
+# Steam Runtime shim, run natively in the session's own runtime.
+#   droiddeck-steam-native --prepare     install or update the client, then exit
+#   droiddeck-steam-native --exec ARGS   run the client (the session starts it this way)
+set -eu
+CDN=https://client-update.fastly.steamstatic.com
+# Must match the -clientbeta droiddeck-session starts the client with (steam_channel).
+CHANNEL=${BL_STEAM_CHANNEL:-steamdeck_publicbeta}
+REAL_HOME=${HOME:-/root}
+STEAM_DIR=${XDG_DATA_HOME:-$REAL_HOME/.local/share}/Steam
+STATE=$REAL_HOME/.droiddeck-native
+LOG=$STATE/steam-native.log
+mkdir -p "$STATE"
+step() { echo "== STEP $(date -u +%H:%M:%S) $*" | tee -a "$LOG"; }
+
+client_parts() {
+  awk -F'"' '
+    /^\t"/ && NF >= 3 && $4 == "" { block = $2 }
+    $2 == "file" { file[block] = $4 }
+    $2 == "sha2" { sha[block] = $4 }
+    END { for (b in file) if (b ~ /_all$/ || b ~ /_steamrt64$/) print b, file[b], sha[b] }
+  ' "$1" | sort
+}
+
+# Installs the client, or brings it to Valve's current build downloading only the changed parts.
+sync_client() {
+  local chan old cur work version total i block file sum
+  chan=$(cat "$STEAM_DIR/package/beta" 2>/dev/null || echo "$CHANNEL")
+  old=$STEAM_DIR/package/steam_client_${chan}_steamrt64.manifest
+  cur=$(awk -F'"' '$2 == "version" { print $4; exit }' "$old" 2>/dev/null || true)
+  [ -x "$STEAM_DIR/steamrt64/steam" ] || cur=
+  work=$(mktemp -d)
+  if ! curl -fsSL "$CDN/steam_client_${chan}_steamrt64" -o "$work/manifest"; then
+    rm -rf "$work"
+    [ -x "$STEAM_DIR/steamrt64/steam" ] && return 0
+    step "could not reach Valve's update server"; return 1
+  fi
+  version=$(awk -F'"' '$2 == "version" { print $4; exit }' "$work/manifest")
+  if [ -z "$version" ] || [ "$version" = "$cur" ]; then rm -rf "$work"; return 0; fi
+  client_parts "$work/manifest" > "$work/parts"
+  [ -s "$work/parts" ] || { rm -rf "$work"; step "no client components in steam_client_${chan}_steamrt64"; return 1; }
+  if [ -n "$cur" ] && [ -f "$old" ]; then
+    client_parts "$old" | awk '{ print $3 }' > "$work/have"
+    grep -vwF -f "$work/have" "$work/parts" > "$work/todo" || true
+  else
+    cp "$work/parts" "$work/todo"
+  fi
+  total=$(grep -c . "$work/todo" || true)
+  step "${cur:+updating}${cur:-installing} the x86-64 Steam client: $version (${cur:-new}, $total part(s))"
+  mkdir -p "$STEAM_DIR/package"
+  i=0
+  while read -r block file sum; do
+    i=$((i + 1))
+    step "downloading Steam: $block ($i/$total)"
+    if ! curl -fsSL "$CDN/$file" -o "$work/$file" || ! echo "$sum  $work/$file" | sha256sum -c --quiet; then
+      rm -rf "$work"
+      [ -n "$cur" ] && { step "could not update the client; it updates itself"; return 0; }
+      step "could not download the client"; return 1
+    fi
+    unzip -qo "$work/$file" -d "$STEAM_DIR"
+    rm -f "$work/$file"
+  done < "$work/todo"
+  cp -f "$work/manifest" "$old"
+  echo "$chan" > "$STEAM_DIR/package/beta"
+  echo "$version" > "$STEAM_DIR/package/droiddeck-installed"
+  chmod +x "$STEAM_DIR/steam.sh" "$STEAM_DIR/steamrt64/steam" "$STEAM_DIR/ubuntu12_32/steam" 2>/dev/null || true
+  rm -rf "$work"
+}
+
+prepare() {
+  # The client's opt-in to its SteamRT3 build; without it, it re-executes through steam.sh, whose checks fail under proot.
+  mkdir -p "$STEAM_DIR" && : > "$STEAM_DIR/.steam-enable-steamrt64-client"
+  sync_client
+  local scout=$STEAM_DIR/ubuntu12_32
+  if [ -f "$scout/steam-runtime.tar.xz" ] &&
+     { [ ! -x "$scout/steam-runtime/run.sh" ] ||
+       ! cmp -s "$scout/steam-runtime.tar.xz.checksum" "$scout/steam-runtime/checksum"; }; then
+    step "unpacking Valve's scout runtime for native Linux games"
+    rm -rf "$scout/steam-runtime.new"
+    mkdir -p "$scout/steam-runtime.new"
+    if tar -xJf "$scout/steam-runtime.tar.xz" -C "$scout/steam-runtime.new" &&
+       [ -x "$scout/steam-runtime.new/steam-runtime/run.sh" ]; then
+      rm -rf "$scout/steam-runtime"
+      mv "$scout/steam-runtime.new/steam-runtime" "$scout/steam-runtime"
+      cp -f "$scout/steam-runtime.tar.xz.checksum" "$scout/steam-runtime/checksum" 2>/dev/null || true
+    else
+      step "could not unpack the scout runtime; native Linux games will not start"
+    fi
+    rm -rf "$scout/steam-runtime.new"
+  fi
+  mkdir -p "$STEAM_DIR/steamapps" "$REAL_HOME/.steam"
+  ln -sfn "$STEAM_DIR" "$REAL_HOME/.steam/root"
+  ln -sfn "$STEAM_DIR" "$REAL_HOME/.steam/steam"
+  ln -sfn "$STEAM_DIR/ubuntu12_32" "$REAL_HOME/.steam/bin32"
+  ln -sfn "$STEAM_DIR/ubuntu12_64" "$REAL_HOME/.steam/bin64"
+  ln -sfn "$STEAM_DIR/linux32" "$REAL_HOME/.steam/sdk32"
+  ln -sfn "$STEAM_DIR/linux64" "$REAL_HOME/.steam/sdk64"
+  # Valve's Steam Runtime container needs user namespaces and a session-bus launcher; steamrt-shim stands in for both.
+  droiddeck-steamrt-shim "$STEAM_DIR/steamrt64" "$STATE/steamrt-shim" || rm -rf "$STATE/steamrt-shim"
+  # Valve's platform libraries ship without soname links (pressure-vessel makes them); ldconfig adds them here.
+  local libs=$STATE/steamrt-libs d f n
+  rm -rf "$libs"
+  mkdir -p "$libs"
+  for d in "$STEAM_DIR"/steamrt64/pv-runtime/steam-runtime-steamrt/steamrt3c_platform_*/files/lib/x86_64-linux-gnu \
+           "$STEAM_DIR"/steamrt64/pv-runtime/steam-runtime-steamrt/steamrt3c_platform_*/files/usr/lib/x86_64-linux-gnu; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*.so*; do [ -e "$libs/$(basename "$f")" ] || ln -s "$f" "$libs/"; done
+  done
+  ldconfig -n "$libs" >>"$LOG" 2>&1 || step "ldconfig on $libs failed"
+  # LD_LIBRARY_PATH beats the system folders: Valve's older glibc and friends must not shadow the runtime's.
+  for f in "$libs"/*; do
+    n=$(basename "$f")
+    if [ -e "/usr/lib/$n" ] || [ -e "/lib/$n" ]; then rm -f "$f"; fi
+  done
+}
+
+client_env() {
+  export STEAM_RUNTIME=1
+  [ -d "$STATE/steamrt-shim" ] && export STEAM_RUNTIME_STEAMRT=$STATE/steamrt-shim
+  # The client starts commands via steam-runtime-launch-client; Valve's needs a session-bus service, the shim's runs them.
+  [ -d "$STATE/steamrt-shim/bin" ] && export PATH=$STATE/steamrt-shim/bin:$PATH
+  export LD_LIBRARY_PATH=$STEAM_DIR/steamrt64:$STEAM_DIR/steamrt64/panorama:$STATE/steamrt-libs
+  # After an update the client re-executes itself through pressure-vessel-wrap (bwrap) unless this guard is set.
+  export STEAM_STEAMRT_RECURSION_GUARD=1
+  # proot is a tracer: tier0 takes it for a debugger and breaks into it with int3 on its first failed assertion.
+  export BL_WEBHELPER_HIDE_TRACER=1
+  export STEAM_EXTRA_COMPAT_TOOLS_PATHS=
+}
+
+case ${1:-} in
+  --prepare) prepare; exit 0 ;;
+  --exec)
+    shift
+    client_env
+    cd "$STEAM_DIR"
+    echo "== x86-64 client (native): $(cat "$STEAM_DIR/package/droiddeck-installed" 2>/dev/null || echo unknown) (the client may update itself)" >&2
+    exec "$STEAM_DIR/steamrt64/steam" "$@"
+    ;;
+  *) echo "usage: droiddeck-steam-native --prepare | --exec ARGS" >&2; exit 2 ;;
+esac

@@ -20,6 +20,14 @@ export DROIDDECK_ABI=$ABI
 cp "$WORK"/pulseaudio/lib/*.so "$LIBS/"
 "$REPO/tools/aaudio-sink/build.sh" "$WORK/pulseaudio/src" "$WORK/pulseaudio/bundle/modules/$ABI"
 mkdir -p "$REPO/app/build/prepared-assets-$ABI"
+# The session preloads (System V IPC for Steam's tier0, the controller reader) as x86_64 builds, at the paths the
+# arm64 build uses for its own; glibc 2.31 keeps them loadable in Steam Linux Runtime 3.0.
+docker run --rm --platform linux/amd64 -v "$REPO":/src:ro -v "$WORK":/out -w /src -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+  debian:bullseye sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+    gcc g++ gcc-multilib g++-multilib binutils >/dev/null && sh tools/linuxfs/build-x86-preloads.sh /out/preloads &&
+    chown -R "$HOST_UID:$HOST_GID" /out/preloads'
+mkdir -p "$REPO/app/build/prepared-assets-$ABI/linuxfs"
+cp "$WORK/preloads/x86_64/libblsession.so" "$WORK/preloads/x86_64/libfakeinput.so" "$REPO/app/build/prepared-assets-$ABI/linuxfs/"
 tar -C "$WORK/pulseaudio/bundle" --owner=0 --group=0 --sort=name -cf - . | zstd -19 -q -f -o "$REPO/app/build/prepared-assets-$ABI/pulseaudio.tzst"
 
 . "$REPO/tools/directaudio/release.env"

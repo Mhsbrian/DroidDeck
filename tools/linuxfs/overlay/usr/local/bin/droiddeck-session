@@ -385,8 +385,17 @@ case $mode in
     export MOZ_SHM_NO_SEALS=1
     steam_x64=0
     [ "${BL_STEAM_CLIENT_ARCH:-}" = x86_64 ] && steam_x64=1
+    # An x86_64 runtime (the Googlebook build) runs Valve's x86-64 client natively; there is no arm64 client.
+    steam_native=0
+    [ "$(uname -m)" = x86_64 ] && { steam_native=1; steam_x64=0; }
     steam_cef_gpu=1
-    if [ "$steam_x64" = 1 ]; then
+    if [ "$steam_native" = 1 ]; then
+      step "checking the Steam client (x86-64, native; the first run downloads it)"
+      droiddeck-steam-native --prepare || steam_setup_failed $?
+      step "Steam client ready"
+      steam_root=$XDG_DATA_HOME/Steam
+      steam_client=(droiddeck-steam-native --exec)
+    elif [ "$steam_x64" = 1 ]; then
       step "checking the Steam client's arm64 parts (first run downloads them, ~1-2 min)"
       # droiddeck-steam-install removes the repair request: read it first so Repair Steam covers both clients.
       _bl_x64_repair=0
@@ -426,7 +435,7 @@ case $mode in
         echo ge >> "$HOME/.bl-proton-extra"
       fi
     fi
-    if [ -s "$HOME/.bl-proton-extra" ]; then
+    if [ "$steam_native" = 0 ] && [ -s "$HOME/.bl-proton-extra" ]; then
       _bl_left=$HOME/.bl-proton-extra.left
       : > "$_bl_left"
       _bl_got_proton=0
@@ -638,8 +647,10 @@ case $mode in
     if [ "$steam_x64" = 0 ]; then
     step "registering the app's game library with Steam"
     droiddeck-steam-library "$steam_root" || true
+    if [ "$steam_native" = 0 ]; then
     step "setting up the ARM64 Proton compatibility tool"
     steam-compatibility "$steam_root" || true
+    fi
     if [ -z "${BL_DESKTOP:-}" ] && [ "${BL_STEAM_UI:-}" != desktop ]; then
       droiddeck-steam-ui-scale "$steam_root" "${BL_WIDTH:-1280}" "${BL_HEIGHT:-720}" || true
     fi
@@ -668,7 +679,7 @@ case $mode in
         "${BL_X64_HOME:-$HOME/.droiddeck-x64}/.local/share/Steam" &&
         echo "$BL_SHADER_PRECACHE" > "$HOME/.bl-shader-precache-applied" || true
     fi
-    if [ "$steam_x64" = 0 ] && [ ! -f "$steam_root/steamapps/appmanifest_4427310.acf" ]; then
+    if [ "$steam_x64" = 0 ] && [ "$steam_native" = 0 ] && [ ! -f "$steam_root/steamapps/appmanifest_4427310.acf" ]; then
       step "asking the client to fetch the ARM64 Proton"
       set -- "$@" steam://install/4427310
       (
@@ -895,7 +906,9 @@ BUSCONF
     export STEAM_RUNTIME=1
     # A containerized client re-executes itself through pressure-vessel-wrap (bwrap) unless told it is already inside.
     export STEAM_STEAMRT_RECURSION_GUARD=1
-    export LD_LIBRARY_PATH=$steam_root/steamrtarm64:$steam_root/steamrtarm64/panorama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+    _bl_client_dir=steamrtarm64
+    [ "$steam_native" = 1 ] && _bl_client_dir=steamrt64
+    export LD_LIBRARY_PATH=$steam_root/$_bl_client_dir:$steam_root/$_bl_client_dir/panorama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
     export SDL_VIDEO_X11_DGAMOUSE=0
     decky_loader=$HOME/homebrew/services/PluginLoader
     if [ -f "$HOME/.droiddeck-decky-enabled" ] && [ -x "$decky_loader" ]; then
@@ -1238,7 +1251,7 @@ BUSCONF
                   [ -z "${_bl_x64_tool:-}" ] ||
                     BL_COMPAT_TOOL=$_bl_x64_tool steam-compatibility "$steam_root" --x64 --live >/dev/null 2>&1 || true
                   droiddeck-steam-x64 --map-direct --live >/dev/null 2>&1 || true
-                else
+                elif [ "$steam_native" = 0 ]; then
                   steam-compatibility "$steam_root" >/dev/null 2>&1 || true
                 fi
               fi
