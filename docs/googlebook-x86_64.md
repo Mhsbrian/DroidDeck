@@ -4,7 +4,7 @@ This fork runs DroidDeck natively on x86_64 Googlebook laptops: Android-based la
 Radeon graphics and, on some models, an NVIDIA GPU. Upstream DroidDeck targets Adreno phones and handhelds
 and is arm64-only. This page records the design, the milestones and what has been measured.
 
-Status: 2026-10-28. Milestones 0 to 2 are done. Milestone 3 is in progress: in DroidDeck's real session on an x86_64 host, Steam's UI starts and reaches "Before Login", then its web helper asserts and Steam exits. The APK goes to the reference laptop once Steam's sign-in screen shows.
+Status: 2026-10-28. Milestones 0 to 2 are done. Milestone 3: in DroidDeck's real session on an x86_64 host, Steam opens Big Picture on its sign-in screen. The runtime is published (`linuxfs-x86_64-gb3`), and the release APK is installed on the reference laptop. Seeing it there on screen is next.
 
 Labels: **CONFIRMED** = measured on the reference laptop; **HYPOTHESIS** = not tested yet.
 
@@ -158,7 +158,7 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
 - It is the same kind of Arch Linux system upstream uses, built for x86_64 because upstream's is ARM-only.
 - The app is the rebuilt Googlebook app. It is pushed to the laptop when it works and preinstalled in the Googlebook image later.
 
-## Milestone 3 so far: the Steam session on an x86_64 host
+## Milestone 3, first attempts: the Steam session on an x86_64 host
 
 `tools/googlebook/session-host-test.sh` runs the real `droiddeck-session steam` in the x86_64 runtime on an x86_64 Linux host. It runs headless, with one AMD render node and no display node, as an Android app sees the GPU. Results, 2026-10-28, on a Radeon 610M (RADV):
 - **Session:** gamescope, Xwayland, the system D-Bus with the login1 and NetworkManager stand-ins, and the agent all start.
@@ -168,6 +168,20 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
 - **With the session preload** (`libblsession`), on the host: the UI's JavaScript chunks fail to load (`ChunkLoadError`). Without the preload the UI initializes ("SteamApp Init - Before Login", 0.2 s). Whether the preload does the same on Android is not known yet.
 - **Then** the web helper hits a tier0 assert as its Vulkan starts (`vulkandriverquery` too), and Steam shuts down about 10 s later. The same happens with gamescope's WSI layer off. Starting the helper through upstream's `droiddeck-x64-webhelper` wrapper was worse, so it is not used.
 - Steam uploads an anonymous minidump to Valve on each assert. That is the client's own behaviour, and no account is involved.
+
+## Milestone 3: Steam's sign-in screen (host)
+
+The harness (`tools/googlebook/session-host-test.sh`) runs the real session on a Radeon 610M render node, and Steam reaches Big Picture's sign-in screen. The CEF pages are Steam Big Picture Mode, MainMenu, QuickAccess and `routes/login`, and a screenshot is in the owner's evidence. What it took:
+- **Following the client through its first-start update** (`droiddeck-steam-native`). The client updates itself and starts again in place. If its update helper still holds the instance lock, that start forwards to a Steam that is going away and quits with 0, which ended the session.
+- **The guest hostname (DroidDeck) maps to loopback** in `/etc/hosts` (x86_64 builds, `LinuxNetworkLinkComponent`). Steam's UI reaches its client through the hostname, and Arch's nss-myhostname resolves it to the network's addresses.
+- **`lsof` in the runtime**, for the session shim to answer.
+- **Harness only:** a full-size `/dev/shm` (Chromium's GPU ring buffers fail in Docker's 64 MB) and local crash reports.
+
+The earlier JavaScript chunk errors and web helper asserts came from these, not from the session preload.
+
+**Published like upstream's runtime:**
+- `linuxfs-x86_64-gb3` (sha256 `e9838030…`, 391,365,151 bytes);
+- catalog release `googlebook-runtime` (`linuxfs-x86_64.json`), which the x86_64 build reads.
 
 ## Milestone 0: what was measured
 
