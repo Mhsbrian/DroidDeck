@@ -21,9 +21,10 @@ cp "$WORK"/pulseaudio/lib/*.so "$LIBS/"
 "$REPO/tools/aaudio-sink/build.sh" "$WORK/pulseaudio/src" "$WORK/pulseaudio/bundle/modules/$ABI"
 mkdir -p "$REPO/app/build/prepared-assets-$ABI"
 # The session preloads (System V IPC for Steam's tier0, the controller reader) as x86_64 builds, at the paths the
-# arm64 build uses for its own; glibc 2.31 keeps them loadable in Steam Linux Runtime 3.0.
+# arm64 build uses for its own; glibc 2.31 keeps them loadable in Steam Linux Runtime 3.0. Debian 11 is on its archive now.
 docker run --rm --platform linux/amd64 -v "$REPO":/src:ro -v "$WORK":/out -w /src -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  debian:bullseye sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+  debian:bullseye sh -c 'printf "deb http://archive.debian.org/debian bullseye main\ndeb http://archive.debian.org/debian-security bullseye-security main\n" > /etc/apt/sources.list &&
+    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     gcc g++ gcc-multilib g++-multilib binutils >/dev/null && sh tools/linuxfs/build-x86-preloads.sh /out/preloads &&
     chown -R "$HOST_UID:$HOST_GID" /out/preloads'
 mkdir -p "$REPO/app/build/prepared-assets-$ABI/linuxfs"

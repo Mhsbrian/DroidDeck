@@ -22,12 +22,15 @@ cid=$(docker create --platform linux/amd64 "$ARCH_IMAGE" bash -c "
 ")
 docker start -a "$cid" >"$OUT/pacman.log" 2>&1 || { tail -30 "$OUT/pacman.log"; docker rm "$cid" >/dev/null; exit 1; }
 rm -rf "$OUT/rootfs" && mkdir -p "$OUT/rootfs"
-docker export "$cid" | tar -C "$OUT/rootfs" -xf - --exclude=.dockerenv
+docker export "$cid" | tar -C "$OUT/rootfs" -xpf - --exclude=.dockerenv
+chmod 1777 "$OUT/rootfs/tmp" "$OUT/rootfs/var/tmp"
 docker rm "$cid" >/dev/null
 if [[ -n ${GAMESCOPE_TZST:-} ]]; then
   zstd -dc "$GAMESCOPE_TZST" | tar -C "$OUT/rootfs" -xf -
   test -x "$OUT/rootfs/usr/local/bin/gamescope"
 fi
+# docker export leaves these empty; the app writes resolv.conf from Android's link at each session start.
+printf '127.0.0.1 localhost\n::1 localhost\n' > "$OUT/rootfs/etc/hosts"
 mkdir -p "$OUT/rootfs/opt/android-host"
 install -m755 "$OUT/proot/libproot.so" "$OUT/rootfs/opt/android-host/proot"
 install -m755 "$OUT/proot/libproot-loader.so" "$OUT/rootfs/opt/android-host/loader"

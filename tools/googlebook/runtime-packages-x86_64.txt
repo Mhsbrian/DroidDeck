@@ -1,5 +1,5 @@
 # Arch Linux x86_64 packages of the Googlebook runtime (multilib enabled). NVIDIA's driver is never part of it.
-bash coreutils findutils sed gawk grep tar gzip xz zstd bzip2 unzip cabextract libarchive squashfs-tools
+bash coreutils diffutils findutils sed gawk grep tar gzip xz zstd bzip2 unzip cabextract libarchive squashfs-tools
 which file procps-ng psmisc util-linux iproute2 curl ca-certificates sqlite less python python-gobject
 glibc lib32-glibc gcc-libs lib32-gcc-libs
 dbus fontconfig ttf-dejavu ttf-liberation

@@ -68,10 +68,25 @@ sync_client() {
   rm -rf "$work"
 }
 
+# Valve's packages carry no execute bits beyond the client itself; FEX loaded binaries regardless, a native start cannot.
+mark_executables() {
+  local d f
+  for d in "$STEAM_DIR" "$STEAM_DIR/steamrt64" "$STEAM_DIR/ubuntu12_32" "$STEAM_DIR/ubuntu12_64" \
+           "$STEAM_DIR"/steamrt64/pv-runtime/*/bin "$STEAM_DIR"/steamrt64/pv-runtime/*/pressure-vessel/bin; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      { [ -f "$f" ] && [ ! -x "$f" ]; } || continue
+      case $f in *.so|*.so.*) continue ;; esac
+      case $(head -c 4 "$f" | od -An -c | tr -d ' \n') in 177ELF|'#!'*) chmod +x "$f" ;; esac
+    done
+  done
+}
+
 prepare() {
   # The client's opt-in to its SteamRT3 build; without it, it re-executes through steam.sh, whose checks fail under proot.
   mkdir -p "$STEAM_DIR" && : > "$STEAM_DIR/.steam-enable-steamrt64-client"
   sync_client
+  mark_executables
   local scout=$STEAM_DIR/ubuntu12_32
   if [ -f "$scout/steam-runtime.tar.xz" ] &&
      { [ ! -x "$scout/steam-runtime/run.sh" ] ||
@@ -120,7 +135,8 @@ client_env() {
   [ -d "$STATE/steamrt-shim" ] && export STEAM_RUNTIME_STEAMRT=$STATE/steamrt-shim
   # The client starts commands via steam-runtime-launch-client; Valve's needs a session-bus service, the shim's runs them.
   [ -d "$STATE/steamrt-shim/bin" ] && export PATH=$STATE/steamrt-shim/bin:$PATH
-  export LD_LIBRARY_PATH=$STEAM_DIR/steamrt64:$STEAM_DIR/steamrt64/panorama:$STATE/steamrt-libs
+  # The web helper (steamrt64) loads CEF from ubuntu12_64, where the webkit part installs it.
+  export LD_LIBRARY_PATH=$STEAM_DIR/steamrt64:$STEAM_DIR/steamrt64/panorama:$STEAM_DIR/ubuntu12_64:$STATE/steamrt-libs
   # After an update the client re-executes itself through pressure-vessel-wrap (bwrap) unless this guard is set.
   export STEAM_STEAMRT_RECURSION_GUARD=1
   # proot is a tracer: tier0 takes it for a debugger and breaks into it with int3 on its first failed assertion.
