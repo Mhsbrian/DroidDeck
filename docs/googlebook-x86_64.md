@@ -4,7 +4,7 @@ This fork runs DroidDeck natively on x86_64 Googlebook laptops: Android-based la
 Radeon graphics and, on some models, an NVIDIA GPU. Upstream DroidDeck targets Adreno phones and handhelds
 and is arm64-only. This page records the design, the milestones and what has been measured.
 
-Status: 2026-10-28. Milestones 0 and 1 are done; seeing the app on screen is still open. Milestone 2 is partly done: an x86_64 runtime and a patched gamescope build and run in the app's SELinux domain. The app does not download them yet.
+Status: 2026-10-28. Milestones 0 and 1 are done (seeing the app on screen is still open). Milestone 2 is done except hosting: the app installs the x86_64 runtime from a local file, and Valve's x86-64 Steam client installs and starts natively. Milestone 3 (Steam on screen) is next and needs the laptop's screen.
 
 Labels: **CONFIRMED** = measured on the reference laptop; **HYPOTHESIS** = not tested yet.
 
@@ -56,7 +56,7 @@ NVIDIA's Linux driver is not part of this repository. It must match the device's
 | --- | --- | --- | --- |
 | 0 | Feasibility on the device | native proot runs an x86_64 glibc system; both GPUs render inside it | **done** (below) |
 | 1 | x86_64 APK | `assembleRelease` makes an x86_64 APK; it installs and its front end opens | **done** (below), apart from seeing it on screen |
-| 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64; the app downloads it, and the x86_64 proot pack, instead of upstream's arm64 ones | **partly done** (below): runtime and gamescope built and tested; not yet hosted or downloaded by the app |
+| 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64; the app installs it and uses its proot instead of upstream's arm64 ones | **done**, apart from hosting the runtime (below) |
 | 3 | Steam on the Radeon | Steam Big Picture appears through the app's compositor on the Radeon | |
 | 4 | Controllers | Steam Input sees the controllers Steam supports as Steam sees them on SteamOS: buttons, rumble, and gyro and touchpad where the controller has them. Xbox, DualSense and 8BitDo controllers also work in emulators and other non-Steam apps. Keyboard, mouse and touch work | |
 | 5 | Games on the Radeon | a Proton game and a native Linux game run; fps recorded | |
@@ -125,6 +125,30 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
   - hosting the runtime, the x86_64 proot pack and catalogs, and pointing the app at them;
   - the x86_64 Steam client and Proton in the session scripts;
   - presenting on screen through the app's compositor (milestone 3).
+
+## Milestone 2, second part: the app and Steam
+
+- **App, x86_64 builds only** (arm64 unchanged; `DeviceSupport.nativeX86()`):
+  - The patched proot (and its i386 loader) comes from the runtime's `opt/android-host`. No add-on pack is pinned, so nothing ARM is fetched.
+  - The runtime catalog is a local file: `droiddeck-runtime-x86_64.json` in the app's external files directory (`Android/data/<package>/files/`). Its `url` may name an archive beside it, and the archive is still checked against the catalog's SHA-256.
+  - No ARM64 Proton seed (Steam installs Valve's Proton), no FEX catalog, no non-Adreno warning.
+  - RADV is the default Linux driver instead of the first ICD the runtime lists.
+  - The APK carries x86_64 builds of the session preloads: System V IPC for the client's tier0, and the controller reader for Steam Input.
+- **Steam.** `droiddeck-steam-native` installs, updates and starts Valve's steamrt64 client in the session's runtime. It is `droiddeck-steam-x64`'s flow without FEX: delta updates, scout runtime, `~/.steam` links, the steamrt shim, and Valve's platform libraries. `droiddeck-session` uses it when the runtime is x86_64 and skips the ARM64 Proton steps.
+- **Runtime gb2** (sha256 `93e894b7…`): `/tmp` at 1777, a localhost `/etc/hosts`, and `diffutils`.
+- **Checked (2026-10-28):**
+  - On the build host, in the runtime image: the client (`1793056502`, `steamdeck_publicbeta`, 28 parts SHA-256-checked) installs in 30 s.
+  - On the reference laptop, in the app's SELinux domain under gamescope (headless): **the client starts natively**, its GPU query finds RADV, and it reports correctly that it is offline. The laptop was asleep, so Android's Doze blocked the app's network.
+  - Its web helper (CEF) starts but restarts about every 10 s. In this bare test there is no system D-Bus, no network and none of upstream's web helper flags, all of which the real session provides. Milestone 3 continues there.
+  - Fixed on the way:
+    - Valve's update parts carry no execute bits, which FEX never needed, so `droiddeck-steam-native` now sets them.
+    - CEF lives in `ubuntu12_64`, which is now on the library path.
+- **Not done:**
+  - hosting the runtime: a decision for the owner;
+  - Valve's Proton without the Steam Linux Runtime container;
+  - NVIDIA's driver as a session choice (it needs gamescope kept on the Radeon while games use the RTX);
+  - 32-bit preloads;
+  - 32-bit SDL2, which is missing from the Arch snapshot and is used only by Steam's 32-bit GL query.
 
 ## Milestone 0: what was measured
 
