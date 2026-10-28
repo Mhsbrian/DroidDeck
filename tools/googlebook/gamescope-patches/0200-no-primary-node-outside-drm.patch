@@ -1,0 +1,17 @@
+Gamescope on an Android app: only render nodes are open to apps, so a missing primary node
+must not stop the nested (Wayland) and headless backends. Only the DRM backend uses it.
+
+--- a/src/rendervulkan.cpp
++++ b/src/rendervulkan.cpp
+@@ -478,9 +478,9 @@
+ 		};
+ 		vk.GetPhysicalDeviceProperties2( physDev(), &props2 );
+ 
++		// Android apps may open render nodes only; the primary node is used by the DRM backend alone.
+ 		if ( !GetBackend()->UsesVulkanSwapchain() && !drmProps.hasPrimary ) {
+-			vk_log.errorf( "physical device has no primary node" );
+-			return false;
++			vk_log.warnf( "physical device has no primary node" );
+ 		}
+ 		if ( !drmProps.hasRender ) {
+ 			vk_log.errorf( "physical device has no render node" );

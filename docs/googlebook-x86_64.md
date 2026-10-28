@@ -4,7 +4,7 @@ This fork runs DroidDeck natively on x86_64 Googlebook laptops: Android-based la
 Radeon graphics and, on some models, an NVIDIA GPU. Upstream DroidDeck targets Adreno phones and handhelds
 and is arm64-only. This page records the design, the milestones and what has been measured.
 
-Status: 2026-10-28. Milestone 0 (feasibility) is done. Milestone 1 is partly done: an x86_64 debug APK builds, installs and starts on the reference laptop. It cannot start a session yet, because there is no x86_64 runtime (milestone 2).
+Status: 2026-10-28. Milestones 0 and 1 are done; seeing the app on screen is still open. Milestone 2 is partly done: an x86_64 runtime and a patched gamescope build and run in the app's SELinux domain. The app does not download them yet.
 
 Labels: **CONFIRMED** = measured on the reference laptop; **HYPOTHESIS** = not tested yet.
 
@@ -55,8 +55,8 @@ NVIDIA's Linux driver is not part of this repository. It must match the device's
 | # | Milestone | Done when | State |
 | --- | --- | --- | --- |
 | 0 | Feasibility on the device | native proot runs an x86_64 glibc system; both GPUs render inside it | **done** (below) |
-| 1 | x86_64 APK | `assembleRelease` makes an x86_64 APK; it installs and its front end opens | **partly done** (below): debug APK builds, installs and starts; not yet seen on screen; no PulseAudio or store engines yet |
-| 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64; the app downloads it, and the x86_64 proot pack, instead of upstream's arm64 ones | next |
+| 1 | x86_64 APK | `assembleRelease` makes an x86_64 APK; it installs and its front end opens | **done** (below), apart from seeing it on screen |
+| 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64; the app downloads it, and the x86_64 proot pack, instead of upstream's arm64 ones | **partly done** (below): runtime and gamescope built and tested; not yet hosted or downloaded by the app |
 | 3 | Steam on the Radeon | Steam Big Picture appears through the app's compositor on the Radeon | |
 | 4 | Controllers | Steam Input sees the controllers Steam supports as Steam sees them on SteamOS: buttons, rumble, and gyro and touchpad where the controller has them. Xbox, DualSense and 8BitDo controllers also work in emulators and other non-Steam apps. Keyboard, mouse and touch work | |
 | 5 | Games on the Radeon | a Proton game and a native Linux game run; fps recorded | |
@@ -91,6 +91,40 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
   - the Rust store engines (`cargo-ndk` target `x86_64-linux-android`);
   - an x86_64 proot pack and runtime catalog. The app still asks upstream's catalogs for the arm64 runtime, FEX and arm64 Proton (milestone 2).
 - **Labels.** The app is still called "DroidDeck", the same as upstream's. A distinct label comes with packaging (milestone 7).
+
+## Milestone 1, second part: sound and the rest of the Android side
+
+- **PulseAudio.** `tools/googlebook/build-pulseaudio.sh` builds the Android-side PulseAudio 13.0 that upstream ships for arm64: daemon, `libpulse`, `pactl` and the modules. It also builds `libltdl` 2.4.7 and `libsndfile` 1.2.2, all from pinned sources for API 33.
+  - Changes for bionic:
+    - no privilege or capability dropping (Android's app seccomp filter kills `set*id`, and bionic has no libcap);
+    - no gettext;
+    - a higher open-file limit, as Termux uses.
+  - The AAudio and DirectAudio sinks and the DirectAudio relay build for x86_64 with `DROIDDECK_ABI=x86_64`.
+- **Build.** `tools/googlebook/build-apk.sh` builds and signs the whole x86_64 APK (release: 54 MB, x86_64 code only). Generated libraries are not in Git.
+- **Reference laptop, over adb:**
+  - The x86_64 PulseAudio daemon starts and answers `pactl` (server 13.0).
+  - Its AAudio sink opens an Android output stream: 48 kHz, stereo, low-latency mode.
+
+## Milestone 2 so far: the x86_64 runtime
+
+- **Runtime.** `tools/googlebook/build-runtime.sh` builds `linuxfs-x86_64.tar.zst` from the `archlinux:base` image and a dated Arch archive snapshot (`runtime.env`, 2026-10-27), with multilib. 391 MB compressed, 1.6 GB unpacked, 401 packages (`runtime-packages-x86_64.txt`):
+  - Mesa 26.2.5 (RADV), Xwayland 24.1, PipeWire 1.6, MangoHud (mangoapp), Python 3.14, glibc 2.44, 32-bit Mesa and Vulkan;
+  - the x86_64 proot at `opt/android-host`, as in upstream's runtime;
+  - no NVIDIA files: the build refuses to package any.
+- **gamescope.** `tools/googlebook/build-gamescope.sh` builds gamescope 3.16.29 for x86_64 the way upstream does for arm64: Arch's packaging plus upstream's patches.
+  - The two patches for the arm64 Steam client (0009, 0019) are left out.
+  - `gamescope-patches/0200` is added: Android apps may open render nodes only, so a missing primary node must not stop the nested (Wayland) and headless backends.
+  - Upstream's gamescope tests pass.
+- **How it was tested.** adb's `shell` SELinux domain cannot create Unix sockets in `/data/local/tmp`, so Wayland and PulseAudio sockets fail there. The tests therefore ran in the app's own domain: a debuggable build, `run-as`, and the runtime unpacked in the app's files directory, without starting the app.
+- **Results (reference laptop, app domain, headless):**
+  - Patched gamescope on the Radeon runs vkcube through Xwayland and gamescope's WSI layer: 900 frames, clean exit, three runs out of three. One crash (SIGBUS) happened on the first run after the binary was replaced; it did not come back.
+  - Unpatched gamescope stops with "physical device has no primary node".
+  - NVIDIA's own driver (615.78.08, its files added to the test copy only) passes the probe in the app domain.
+  - **Cross-GPU.** gamescope composites on the Radeon while vkcube renders on the RTX through NVIDIA's driver: about 600 frames per 10 s were handed over and composited. This is the milestone 6 path, still without a screen.
+- **Not done yet:**
+  - hosting the runtime, the x86_64 proot pack and catalogs, and pointing the app at them;
+  - the x86_64 Steam client and Proton in the session scripts;
+  - presenting on screen through the app's compositor (milestone 3).
 
 ## Milestone 0: what was measured
 
