@@ -156,6 +156,7 @@ android {
 
         // The Googlebook x86_64 build installs beside upstream's arm64 app.
         if (droiddeckAbi == 'x86_64') applicationIdSuffix '.googlebook'
+        manifestPlaceholders = [appLabel: droiddeckAbi == 'x86_64' ? 'DroidDeck for Googlebook' : '@string/app_name']
         ndk {
             abiFilters droiddeckAbi
         }

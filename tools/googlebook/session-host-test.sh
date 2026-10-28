@@ -51,8 +51,10 @@ BL_STEAM_UI=
 BL_VK_DRIVER=
 ENV
 docker rm -f droiddeck-googlebook-session >/dev/null 2>&1 || true
-# Android's hostname is localhost; the Steam UI reaches the client through it.
-docker run -d --name droiddeck-googlebook-session --hostname localhost -u 1000:1000 --device "$NODE" \
-  --tmpfs /tmp:mode=1777 --tmpfs /run:mode=1777 -v "$WORK/home":/root --env-file "$WORK/session.env" \
+printf '127.0.0.1 localhost DroidDeck\n::1 localhost DroidDeck\n127.0.0.1 crash.steampowered.com\n' > "$WORK/hosts"
+# As on the device: the guest hostname (DroidDeck) maps to loopback, and /dev/shm is a full-size directory, not
+# Docker's 64 MB (Chromium's GPU ring buffers live there). Crash reports stay local while testing.
+docker run -d --name droiddeck-googlebook-session --hostname DroidDeck --shm-size=2g -u 1000:1000 --device "$NODE" \
+  --tmpfs /tmp:mode=1777 --tmpfs /run:mode=1777 -v "$WORK/hosts":/etc/hosts:ro -v "$WORK/home":/root --env-file "$WORK/session.env" \
   droiddeck-googlebook-session:test bash -c 'mkdir -p /run/droiddeck /run/launch /run/debug && exec droiddeck-session steam'
 echo "session log: $WORK/home/session.log; Steam logs: $WORK/home/.local/share/Steam/logs"

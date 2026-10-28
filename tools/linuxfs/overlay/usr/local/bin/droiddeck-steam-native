@@ -151,7 +151,24 @@ case ${1:-} in
     client_env
     cd "$STEAM_DIR"
     echo "== x86-64 client (native): $(cat "$STEAM_DIR/package/droiddeck-installed" 2>/dev/null || echo unknown) (the client may update itself)" >&2
-    exec "$STEAM_DIR/steamrt64/steam" "$@"
+    boot=$STEAM_DIR/logs/bootstrap_log.txt
+    for attempt in 1 2 3; do
+      seen=$(wc -l < "$boot" 2>/dev/null || echo 0)
+      rc=0
+      "$STEAM_DIR/steamrt64/steam" "$@" || rc=$?
+      [ "$rc" = 0 ] && tail -n +"$((seen + 1))" "$boot" 2>/dev/null | grep -q 'Update complete, launching Steam' || exit "$rc"
+      # After an update the client starts itself again in place. If its update helper still holds the instance lock,
+      # that start forwards its command line to a Steam that is going away and quits with 0. A client still running a
+      # few seconds later is the updated one: stay with it (the session ends when this command does); else start again.
+      sleep 5
+      if pgrep -f 'steamrt64/steam( |$)' >/dev/null; then
+        echo "== x86-64 client (native): updated itself and started again; following it" >&2
+        while pgrep -f 'steamrt64/steam( |$)' >/dev/null; do sleep 1; done
+        exit 0
+      fi
+      echo "== x86-64 client (native): updated itself; starting it again (attempt $((attempt + 1)))" >&2
+    done
+    exit "$rc"
     ;;
   *) echo "usage: droiddeck-steam-native --prepare | --exec ARGS" >&2; exit 2 ;;
 esac

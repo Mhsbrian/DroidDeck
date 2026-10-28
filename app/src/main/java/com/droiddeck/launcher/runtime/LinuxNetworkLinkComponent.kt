@@ -268,7 +268,13 @@ class LinuxNetworkLinkComponent(
             staged.writeText(text)
             if (!staged.renameTo(File(etc, "resolv.conf"))) throw IOException("Could not replace resolv.conf")
             val hosts = File(etc, "hosts")
-            if (!hosts.isFile || !hosts.readText().contains("localhost")) {
+            if (com.droiddeck.launcher.core.DeviceSupport.nativeX86()) {
+                // Steam's UI reaches its client through the hostname, which systemd's nss-myhostname in the x86_64
+                // runtime would resolve to the network's addresses rather than loopback.
+                val name = com.droiddeck.launcher.session.SessionPrefs.guestHostname(appContext)
+                val want = "127.0.0.1 localhost $name\n::1 localhost $name\n"
+                if (!hosts.isFile || hosts.readText() != want) hosts.writeText(want)
+            } else if (!hosts.isFile || !hosts.readText().contains("localhost")) {
                 hosts.writeText("127.0.0.1 localhost\n::1 localhost\n")
             }
             Log.i(TAG, "resolver: " + servers.joinToString(" "))
