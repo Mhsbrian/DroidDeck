@@ -14,6 +14,16 @@ app/src/main/jniLibs/arm64-v8a/.proot-inputs
 app/src/main/jniLibs/arm64-v8a/.proot-outputs
 app/src/main/jniLibs/arm64-v8a/libproot-loader.so
 app/src/main/jniLibs/arm64-v8a/libdirectaudiorelay.so
+app/src/main/jniLibs/x86_64/libdirectaudiorelay.so
+app/src/main/jniLibs/x86_64/libproot.so
+app/src/main/jniLibs/x86_64/libproot-loader.so
+app/src/main/jniLibs/x86_64/libproot-loader32.so
+app/src/main/jniLibs/x86_64/libltdl.so
+app/src/main/jniLibs/x86_64/libpulseaudio.so
+app/src/main/jniLibs/x86_64/libpulse.so
+app/src/main/jniLibs/x86_64/libpulsecommon-13.0.so
+app/src/main/jniLibs/x86_64/libpulsecore-13.0.so
+app/src/main/jniLibs/x86_64/libsndfile.so
 app/src/main/rust/stores/target/
 app/src/main/assets/droiddeck-esync/
 

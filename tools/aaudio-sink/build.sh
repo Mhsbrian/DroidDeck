@@ -7,7 +7,13 @@ mkdir -p "$OUTDIR"
 API=26
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-LIBS="$REPO/app/src/main/jniLibs/arm64-v8a"
+ABI=${DROIDDECK_ABI:-arm64-v8a}
+case "$ABI" in
+  arm64-v8a) TRIPLE=aarch64-linux-android ;;
+  x86_64) TRIPLE=x86_64-linux-android ;;
+  *) echo "Unsupported DROIDDECK_ABI: $ABI" >&2; exit 1 ;;
+esac
+LIBS="$REPO/app/src/main/jniLibs/$ABI"
 case "$(uname -s):$(uname -m)" in
   Darwin:arm64) NDK_HOST=darwin-arm64 ;;
   Darwin:x86_64) NDK_HOST=darwin-x86_64 ;;
@@ -22,8 +28,8 @@ fi
 if [[ ! -d "$TOOLCHAIN" && "$NDK_HOST" == linux-aarch64 && -d "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" ]]; then
   TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 fi
-CC="$TOOLCHAIN/aarch64-linux-android${API}-clang"
-CC28="$TOOLCHAIN/aarch64-linux-android28-clang"
+CC="$TOOLCHAIN/${TRIPLE}${API}-clang"
+CC28="$TOOLCHAIN/${TRIPLE}28-clang"
 if [[ ! -x "$CC" || ! -x "$CC28" ]]; then
   echo "Android NDK toolchain not found at $TOOLCHAIN" >&2
   exit 1

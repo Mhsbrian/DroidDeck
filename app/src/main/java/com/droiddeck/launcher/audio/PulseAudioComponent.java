@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Process;
 import android.util.Log;
 
+import com.droiddeck.launcher.BuildConfig;
 import com.droiddeck.launcher.core.FileUtils;
 import com.droiddeck.launcher.core.SessionPart;
 import com.droiddeck.launcher.core.HostProcess;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 public class PulseAudioComponent extends SessionPart {
+    private static final String MODULES_ABI = "arm64-v8a".equals(BuildConfig.NATIVE_ABI) ? "arm64" : BuildConfig.NATIVE_ABI;
     private static final String TAG = "PulseAudio";
     public static final String SOCKET_NAME = "PS0";
     private static final String MIC_SOURCE = "DirectAudioMic";
@@ -73,8 +75,8 @@ public class PulseAudioComponent extends SessionPart {
         File stamp = new File(modulesDir, ".bundle");
         String have = FileUtils.readString(stamp);
         String want = BUNDLE_STAMP + "-" + bundleChecksum();
-        if (!new File(modulesDir, "arm64/module-aaudio-sink.so").isFile()
-                || !new File(modulesDir, "arm64/module-directaudio-native-sink.so").isFile()
+        if (!new File(modulesDir, MODULES_ABI + "/module-aaudio-sink.so").isFile()
+                || !new File(modulesDir, MODULES_ABI + "/module-directaudio-native-sink.so").isFile()
                 || !new File(workingDir, "pactl").isFile()
                 || have == null || !want.equals(have.trim())) {
             Log.i(TAG, "unpacking pulseaudio.tzst (" + want + "; had " + have + ")");
@@ -107,7 +109,7 @@ public class PulseAudioComponent extends SessionPart {
         }
         FileUtils.writeString(new File(workingDir, "default.pa"), String.join("\n", config));
 
-        File modules = new File(workingDir, "modules/arm64");
+        File modules = new File(workingDir, "modules/" + MODULES_ABI);
         ArrayList<String> env = new ArrayList<>();
         env.add("LD_LIBRARY_PATH=/system/lib64:" + modules + ":" + workingDir.getAbsolutePath());
         env.add("HOME=" + workingDir);
@@ -160,7 +162,7 @@ public class PulseAudioComponent extends SessionPart {
         if (!pactl.isFile() || pid <= 1) return null;
         java.lang.Process process = null;
         try {
-            File modules = new File(workingDir, "modules/arm64");
+            File modules = new File(workingDir, "modules/" + MODULES_ABI);
             ArrayList<String> cmd = new ArrayList<>();
             cmd.add(pactl.getAbsolutePath());
             java.util.Collections.addAll(cmd, args);
@@ -221,7 +223,7 @@ public class PulseAudioComponent extends SessionPart {
         }
         java.lang.Process process = null;
         try {
-            File modules = new File(workingDir, "modules/arm64");
+            File modules = new File(workingDir, "modules/" + MODULES_ABI);
             ProcessBuilder builder = new ProcessBuilder(
                     pactl.getAbsolutePath(), "suspend-" + kind, name, Boolean.toString(suspended));
             builder.directory(workingDir);
@@ -270,7 +272,7 @@ public class PulseAudioComponent extends SessionPart {
                 "libpulsecommon-13.0.so", "libpulsecore-13.0.so", "libsndfile.so", "libffi.so"};
         ClassLoader loader = PulseAudioComponent.class.getClassLoader();
         for (String lib : libs) {
-            URL resource = loader != null ? loader.getResource("lib/arm64-v8a/" + lib) : null;
+            URL resource = loader != null ? loader.getResource("lib/" + BuildConfig.NATIVE_ABI + "/" + lib) : null;
             if (resource == null) {
                 Log.w(TAG, lib + " missing from the apk");
                 continue;

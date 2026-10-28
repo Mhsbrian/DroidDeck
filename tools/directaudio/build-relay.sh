@@ -10,8 +10,16 @@ case "$(uname -s)" in
   *) echo 'Unsupported NDK host' >&2; exit 1 ;;
 esac
 toolchain="$NDK/toolchains/llvm/prebuilt/$host/bin"
+abi=${DROIDDECK_ABI:-arm64-v8a}
+case "$abi" in
+  arm64-v8a) triple=aarch64-linux-android ;;
+  x86_64) triple=x86_64-linux-android ;;
+  *) echo "Unsupported DROIDDECK_ABI: $abi" >&2; exit 1 ;;
+esac
+out="$repo_root/app/src/main/jniLibs/$abi/libdirectaudiorelay.so"
+mkdir -p "$(dirname "$out")"
 patch -d "$source_dir" -p1 < "$repo_root/tools/directaudio/microphone-toggle.patch"
-"$toolchain/aarch64-linux-android28-clang" -O2 -Wl,-z,max-page-size=16384 \
-  "$source_dir/directaudio-relay.c" -o "$repo_root/app/src/main/jniLibs/arm64-v8a/libdirectaudiorelay.so" \
+"$toolchain/${triple}28-clang" -O2 -Wl,-z,max-page-size=16384 \
+  "$source_dir/directaudio-relay.c" -o "$out" \
   -laaudio -llog -pthread
-"$toolchain/llvm-strip" --strip-unneeded "$repo_root/app/src/main/jniLibs/arm64-v8a/libdirectaudiorelay.so"
+"$toolchain/llvm-strip" --strip-unneeded "$out"

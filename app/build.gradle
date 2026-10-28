@@ -135,6 +135,7 @@ android {
         versionCode 15
         versionName "0.6.0"
         buildConfigField "String", "BUILD_LABEL", "\"${escapedBuildLabel}\""
+        buildConfigField "String", "NATIVE_ABI", "\"${droiddeckAbi}\""
         buildConfigField "String", "SOURCE_COMMIT", "\"${sourceCommit}\""
         buildConfigField "int", "PR_NUMBER", "${prNumber}"
         buildConfigField "boolean", "CI_BUILD", "${ciBuild}"
@@ -275,7 +276,7 @@ def stageRuntimeAssets = tasks.register('stageRuntimeAssets', Sync) {
     dependsOn(stageSessionScripts)
     from(layout.projectDirectory.dir('src/main/assets')) { exclude 'pulseaudio.tzst' }
     from(rootProject.file('tools/linuxfs/innoextract'))
-    from(layout.buildDirectory.dir('prepared-assets'))
+    from(layout.buildDirectory.dir(droiddeckAbi == 'arm64-v8a' ? 'prepared-assets' : "prepared-assets-${droiddeckAbi}"))
     into(runtimeAssetsDir)
 }
 android.sourceSets.main.assets.setSrcDirs([runtimeAssetsDir])
