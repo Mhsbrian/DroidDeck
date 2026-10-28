@@ -69,6 +69,8 @@ public final class LinuxRuntime {
     /** Termux's unpatched proot inside the rootfs. Developer switch only. */
     public static final String PROOT_ROOTFS = "rootfs fallback";
     public static final String PROOT_MISSING = "missing";
+    /** The x86_64 app's own patched proot. */
+    public static final String PROOT_APP = "app";
 
     private static File rootfsProot(Context context) {
         return new File(rootDir(context), HOST_DIR + "/proot");
@@ -78,13 +80,14 @@ public final class LinuxRuntime {
         return new File(rootDir(context), HOST_DIR + "/loader");
     }
 
-    private static File rootfsLoader32(Context context) {
-        return new File(rootDir(context), HOST_DIR + "/loader32");
+    /** The x86_64 app carries its patched proot as native libraries (tools/googlebook/build-apk.sh). */
+    private static File apkLibrary(Context context, String name) {
+        return new File(context.getApplicationInfo().nativeLibraryDir, name);
     }
 
-    /** proot's loader for i386 programs, shipped only in the x86_64 runtime. */
+    /** proot's loader for i386 programs, shipped only in the x86_64 app. */
     public static File prootLoader32(Context context) {
-        File loader = rootfsLoader32(context);
+        File loader = apkLibrary(context, "libproot-loader32.so");
         return DeviceSupport.nativeX86() && loader.isFile() ? loader : null;
     }
 
@@ -94,20 +97,19 @@ public final class LinuxRuntime {
 
     /** Patched proot is the add-on pack. The rootfs copy is not that binary. */
     public static boolean patchedProot(Context context) {
-        // The x86_64 runtime carries the patched proot built from tools/proot.
-        if (DeviceSupport.nativeX86()) return rootfsProotReady(context);
+        if (DeviceSupport.nativeX86()) return apkLibrary(context, "libproot.so").isFile() && apkLibrary(context, "libproot-loader.so").isFile();
         return AddonPack.PROOT.installed(context);
     }
 
     public static File prootBinary(Context context) {
-        if (DeviceSupport.nativeX86()) return rootfsProot(context);
+        if (DeviceSupport.nativeX86()) return apkLibrary(context, "libproot.so");
         if (AddonPack.PROOT.installed(context)) return AddonPack.PROOT.file(context, "libproot.so");
         if (SessionPrefs.allowStockProot(context)) return rootfsProot(context);
         return AddonPack.PROOT.file(context, "libproot.so");
     }
 
     public static File prootLoader(Context context) {
-        if (DeviceSupport.nativeX86()) return rootfsLoader(context);
+        if (DeviceSupport.nativeX86()) return apkLibrary(context, "libproot-loader.so");
         if (AddonPack.PROOT.installed(context)) return AddonPack.PROOT.file(context, "libproot-loader.so");
         if (SessionPrefs.allowStockProot(context)) return rootfsLoader(context);
         return AddonPack.PROOT.file(context, "libproot-loader.so");
@@ -117,6 +119,7 @@ public final class LinuxRuntime {
     public static String prootSource(Context context) {
         File bin = prootBinary(context);
         if (!bin.isFile()) return PROOT_MISSING;
+        if (DeviceSupport.nativeX86()) return PROOT_APP;
         if (AddonPack.PROOT.installed(context)
                 && bin.getPath().equals(AddonPack.PROOT.file(context, "libproot.so").getPath())) return PROOT_PACK;
         return PROOT_ROOTFS;

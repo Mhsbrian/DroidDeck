@@ -1,0 +1,66 @@
+Android blocks the x86_64 system calls that have newer forms (epoll_create, inotify_init, eventfd, signalfd,
+creat, readlink) for apps. proot answered them ENOSYS, and Valve's x86-64 Steam client failed on epoll_create in an app
+process. Rewrite them to epoll_create1, inotify_init1, eventfd2, signalfd4, openat and readlinkat.
+
+--- a/src/tracee/seccomp.c
++++ b/src/tracee/seccomp.c
+@@ -1,4 +1,5 @@
+ #include <errno.h>     /* E*, */
++#include <fcntl.h>     /* O_*, */
+ #include <signal.h>    /* SIGSYS, */
+ #include <unistd.h>    /* getpgid, */
+ #include <utime.h>     /* utimbuf, */
+@@ -558,6 +559,53 @@
+ 		break;
+ 	}
+ 
++	/* x86_64 system calls older than their *at / *1 / *2 / *4 forms, which Android's app seccomp policy blocks. */
++	case PR_epoll_create:
++		if ((int) peek_reg(tracee, CURRENT, SYSARG_1) <= 0) {
++			set_result_after_seccomp(tracee, -EINVAL);
++			break;
++		}
++		set_sysnum(tracee, PR_epoll_create1);
++		poke_reg(tracee, SYSARG_1, 0);
++		restart_syscall_after_seccomp(tracee);
++		break;
++
++	case PR_inotify_init:
++		set_sysnum(tracee, PR_inotify_init1);
++		poke_reg(tracee, SYSARG_1, 0);
++		restart_syscall_after_seccomp(tracee);
++		break;
++
++	case PR_eventfd:
++		set_sysnum(tracee, PR_eventfd2);
++		poke_reg(tracee, SYSARG_2, 0);
++		restart_syscall_after_seccomp(tracee);
++		break;
++
++	case PR_signalfd:
++		set_sysnum(tracee, PR_signalfd4);
++		poke_reg(tracee, SYSARG_4, 0);
++		restart_syscall_after_seccomp(tracee);
++		break;
++
++	case PR_creat:
++		set_sysnum(tracee, PR_openat);
++		poke_reg(tracee, SYSARG_4, peek_reg(tracee, CURRENT, SYSARG_2));
++		poke_reg(tracee, SYSARG_3, O_CREAT | O_WRONLY | O_TRUNC);
++		poke_reg(tracee, SYSARG_2, peek_reg(tracee, CURRENT, SYSARG_1));
++		poke_reg(tracee, SYSARG_1, AT_FDCWD);
++		restart_syscall_after_seccomp(tracee);
++		break;
++
++	case PR_readlink:
++		set_sysnum(tracee, PR_readlinkat);
++		poke_reg(tracee, SYSARG_4, peek_reg(tracee, CURRENT, SYSARG_3));
++		poke_reg(tracee, SYSARG_3, peek_reg(tracee, CURRENT, SYSARG_2));
++		poke_reg(tracee, SYSARG_2, peek_reg(tracee, CURRENT, SYSARG_1));
++		poke_reg(tracee, SYSARG_1, AT_FDCWD);
++		restart_syscall_after_seccomp(tracee);
++		break;
++
+ 	case PR_set_robust_list:
+ 		tracee->robust_list = peek_reg(tracee, CURRENT, SYSARG_1);
+ 		set_result_after_seccomp(tracee, -ENOSYS);

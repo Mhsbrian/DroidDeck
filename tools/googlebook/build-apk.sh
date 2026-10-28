@@ -15,6 +15,8 @@ mkdir -p "$WORK" "$LIBS"
 export DROIDDECK_ABI=$ABI
 
 [[ -f $LIBS/libwayland-server.so && -f $LIBS/libffi.so ]] || "$REPO/tools/googlebook/build-wayland-server.sh" "$LIBS"
+# The x86_64 app carries its own proot (and its i386 loader), so proot fixes ship with the app, not the runtime.
+"$REPO/tools/proot/build.sh" "$LIBS"
 
 "$REPO/tools/googlebook/build-pulseaudio.sh" "$WORK/pulseaudio"
 cp "$WORK"/pulseaudio/lib/*.so "$LIBS/"

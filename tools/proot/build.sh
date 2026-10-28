@@ -49,6 +49,11 @@ cp "$HERE/profile.h" "$WORK/proot/src/syscall/profile.h"
 for patch in "$HERE"/patches/*.patch; do
   patch -d "$WORK/proot" -p1 --forward --quiet < "$patch"
 done
+if [[ ${DROIDDECK_ABI:-arm64-v8a} == x86_64 ]]; then
+  for patch in "$HERE"/../googlebook/proot-patches/*.patch; do
+    patch -d "$WORK/proot" -p1 --forward --quiet < "$patch"
+  done
+fi
 mkdir -p "$WORK/talloc/config"
 cp "$HERE/talloc-config.h" "$WORK/talloc/config/config.h"
 "$CC" -c -O2 -fPIC -ffile-prefix-map="$WORK"=. -D__STDC_WANT_LIB_EXT1__=1 -DHAVE_CONFIG_H \

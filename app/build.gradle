@@ -221,8 +221,9 @@ android {
         jniLibs {
             useLegacyPackaging = true
             pickFirsts += ['**/libtermux.so']
-            // Shipped in the proot and tracking packs (tools/packs) and run or loaded from there.
-            excludes += ['**/libproot.so', '**/libproot-loader.so', '**/libopencv_java4.so', '**/libmediapipe_tasks_jni.so']
+            // Shipped in the proot and tracking packs (tools/packs) and run or loaded from there. The x86_64 app carries its own proot.
+            excludes += ['**/libopencv_java4.so', '**/libmediapipe_tasks_jni.so']
+            if (droiddeckAbi == 'arm64-v8a') excludes += ['**/libproot.so', '**/libproot-loader.so']
         }
     }
 

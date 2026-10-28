@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # Builds the Googlebook x86_64 Linux runtime (linuxfs-x86_64.tar.zst) from a dated Arch Linux archive snapshot, in Docker.
-# The x86_64 proot from tools/proot goes to opt/android-host, as in upstream's runtime. GAMESCOPE_TZST (from
-# build-gamescope.sh) adds the patched gamescope in /usr/local/bin and its WSI layer over Arch's.
+# proot is not in it: the x86_64 app carries its own (build-apk.sh). GAMESCOPE_TZST (from build-gamescope.sh) adds the
+# patched gamescope in /usr/local/bin and its WSI layer over Arch's.
 set -euo pipefail
 OUT=$(mkdir -p "$1" && cd "$1" && pwd)
-: "${NDK:?set NDK to the Android NDK root}"
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/runtime.env"
-DROIDDECK_ABI=x86_64 "$HERE/../proot/build.sh" "$OUT/proot" >"$OUT/proot-build.log" 2>&1
 pkgs=$(grep -v '^#' "$HERE/runtime-packages-x86_64.txt" | tr '\n' ' ')
 cid=$(docker create --platform linux/amd64 "$ARCH_IMAGE" bash -c "
   set -e
@@ -37,10 +35,6 @@ chmod 755 "$OUT/rootfs/usr/local/bin"/* "$OUT/rootfs/usr/bin"/steamos-* "$OUT/ro
 test -x "$OUT/rootfs/usr/local/bin/droiddeck-session"
 # docker export leaves these empty; the app writes resolv.conf from Android's link at each session start.
 printf '127.0.0.1 localhost\n::1 localhost\n' > "$OUT/rootfs/etc/hosts"
-mkdir -p "$OUT/rootfs/opt/android-host"
-install -m755 "$OUT/proot/libproot.so" "$OUT/rootfs/opt/android-host/proot"
-install -m755 "$OUT/proot/libproot-loader.so" "$OUT/rootfs/opt/android-host/loader"
-install -m755 "$OUT/proot/libproot-loader32.so" "$OUT/rootfs/opt/android-host/loader32"
 cp "$OUT/rootfs/var/lib/googlebook-runtime-packages.txt" "$OUT/packages.txt"
 if grep -qiE '^(nvidia|lib32-nvidia|libxnvctrl|egl-wayland) ' "$OUT/packages.txt" || find "$OUT/rootfs" -name 'libnvidia-*' -o -name 'libGLX_nvidia*' | grep -q .; then
   echo "NVIDIA files found in the runtime; refusing to package it" >&2; exit 1
