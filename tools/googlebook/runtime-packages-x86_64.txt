@@ -2,7 +2,7 @@
 bash coreutils diffutils findutils sed gawk grep tar gzip xz zstd bzip2 unzip cabextract libarchive squashfs-tools
 which file procps-ng psmisc util-linux iproute2 curl ca-certificates sqlite less python python-gobject
 glibc lib32-glibc gcc-libs lib32-gcc-libs
-dbus fontconfig ttf-dejavu ttf-liberation
+dbus fontconfig ttf-dejavu ttf-liberation lsof
 gamescope xorg-xwayland xorg-xprop xorg-xset xorg-xrandr wayland-utils
 mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon vulkan-icd-loader lib32-vulkan-icd-loader vulkan-tools mesa-utils
 libpulse lib32-libpulse alsa-lib lib32-alsa-lib pipewire

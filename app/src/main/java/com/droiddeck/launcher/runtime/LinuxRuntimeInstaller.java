@@ -89,15 +89,18 @@ public final class LinuxRuntimeInstaller {
         return v == null ? null : v.trim();
     }
 
-    /** The x86_64 runtime is not published yet; its catalog is a local file whose url may name a file beside it. */
+    /** The Googlebook x86_64 runtime, published like upstream's: one release whose catalog is replaced per version. */
+    public static final String X86_CATALOG_URL =
+            "https://github.com/Mhsbrian/DroidDeck/releases/download/googlebook-runtime/linuxfs-x86_64.json";
+    /** A catalog in the app's external files directory wins, for testing a runtime before it is published. */
     static final String LOCAL_CATALOG = "droiddeck-runtime-x86_64.json";
 
     public static Release fetchRelease(Context context) {
         if (!DeviceSupport.nativeX86()) return fetchRelease();
         File dir = context.getExternalFilesDir(null);
         File catalog = dir == null ? null : new File(dir, LOCAL_CATALOG);
-        String body = catalog != null && catalog.isFile() ? FileUtils.readString(catalog) : null;
-        Release release = parseRelease(body);
+        if (catalog == null || !catalog.isFile()) return parseRelease(Downloader.downloadString(X86_CATALOG_URL));
+        Release release = parseRelease(FileUtils.readString(catalog));
         if (release == null || release.url.contains("://")) return release;
         File archive = new File(release.url.startsWith("/") ? release.url : new File(dir, release.url).getPath());
         return new Release(release.version, "file://" + archive.getPath(), release.sha256, release.size);
