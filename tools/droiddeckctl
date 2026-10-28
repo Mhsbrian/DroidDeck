@@ -27,6 +27,9 @@ from proot_profile import report as proot_profile_report
 # tools/release/variants.txt: the same app also ships as other packages (e.g. com.antutu.benchmark.full).
 PACKAGE = os.environ.get("DROIDDECK_PACKAGE", "com.droiddeck.launcher")
 AUTHORITY = f"content://{PACKAGE}.agent"
+# Android user that runs the app (Googlebooks run the owner's apps as user 10); unset = the shell's default.
+ANDROID_USER = os.environ.get("DROIDDECK_USER", "")
+USER_ARGS = ["--user", ANDROID_USER] if ANDROID_USER else []
 PACKAGE_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
 STEAM_CLIENT_APP = 769
 REQUEST_CAP = 256 * 1024
@@ -100,7 +103,7 @@ def encode_request(request: dict) -> str:
 
 def provider_call(adb: str, serial: str, method: str, arg: str | None = None, request: dict | None = None,
                   timeout: float = 30) -> dict:
-    command = ["shell", "content", "call", "--uri", AUTHORITY, "--method", method]
+    command = ["shell", "content", "call", *USER_ARGS, "--uri", AUTHORITY, "--method", method]
     if arg is not None:
         command.extend(["--arg", arg])
     if request is not None:
@@ -131,6 +134,7 @@ def start_agent_activity(adb: str, serial: str, request: dict) -> None:
         "am",
         "start",
         "-W",
+        *USER_ARGS,
         "-n",
         f"{PACKAGE}/com.droiddeck.launcher.agent.AgentStartActivity",
         "--es",

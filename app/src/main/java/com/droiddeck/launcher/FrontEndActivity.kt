@@ -2436,7 +2436,8 @@ class FrontEndActivity : ComponentActivity() {
             Thread({ checkCatalog() }, "catalog").start()
             return
         }
-        if (installed == null && !com.droiddeck.launcher.core.DeviceSupport.adreno()) { showNonAdreno = release; return }
+        if (installed == null && !com.droiddeck.launcher.core.DeviceSupport.adreno() &&
+            !com.droiddeck.launcher.core.DeviceSupport.nativeX86()) { showNonAdreno = release; return }
         install(release)
     }
 

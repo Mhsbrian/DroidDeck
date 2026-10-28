@@ -162,7 +162,10 @@ object SessionFiles {
             val dir = asset.substringBeforeLast('/')
             runCatching { context.assets.list("linuxfs/$dir")?.contains(asset.substringAfterLast('/')) == true }.getOrDefault(false)
         }
-        val all = (if (DesktopCatalog.desktopInstalled(root)) files + DESKTOP_FILES else files) + optional
+        val all = (if (DesktopCatalog.desktopInstalled(root)) files + DESKTOP_FILES else files) + optional +
+            // The x86_64 runtime's GTK loads images through glycin, which needs bwrap's user namespaces; see the stand-in.
+            (if (com.droiddeck.launcher.core.DeviceSupport.nativeX86())
+                listOf("usr/local/bin/droiddeck-bwrap-unavailable" to "usr/bin/bwrap") else emptyList())
         val ledger = StageLedger(File(root, STAGED_LEDGER), apkIdentity(context))
         for ((asset, relative) in all) {
             val target = File(root, relative)

@@ -1,0 +1,5 @@
+#!/bin/sh
+# An Android app cannot create user namespaces, so bubblewrap can never run here. Saying so in bwrap's own words makes
+# glycin (GTK's image loader) load images without its sandbox instead of failing every image, which aborted gamescope.
+echo "bwrap: No permissions to create a new namespace, likely because the kernel does not allow non-privileged user namespaces." >&2
+exit 1
