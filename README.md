@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+> **This fork is for Googlebook x86_64 machines.** It is not the upstream DroidDeck and it is not for Adreno phones or handhelds; use [Droid-Deck/DroidDeck](https://github.com/Droid-Deck/DroidDeck) for those. This fork runs DroidDeck natively on x86_64 Googlebook laptops (Android-based, AMD Ryzen with Radeon graphics, optionally an NVIDIA GPU): an x86_64 app, proot and Linux runtime, Valve's x86_64 Steam client and Proton, with no ARM translation and no FEX. Games render with Mesa RADV on the Radeon or with NVIDIA's own Linux driver on the NVIDIA GPU. It is a work in progress: status, milestones and measurements are in [docs/googlebook-x86_64.md](docs/googlebook-x86_64.md).
+
 DroidDeck brings the SteamOS experience to Android: Valve's Steam client in Big Picture on your Adreno handheld, with Windows games through Valve's ARM64 Proton.
 
 <p align="center"><a href="https://discord.gg/JRGAvawjsm"><img src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Join the DroidDeck Discord"></a></p>

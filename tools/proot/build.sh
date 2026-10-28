@@ -15,7 +15,12 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$NDK_HOST/bin"
 if [[ ! -d "$TOOLCHAIN" && -d "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" ]]; then
   TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 fi
-CC="$TOOLCHAIN/aarch64-linux-android${API}-clang"
+case "${DROIDDECK_ABI:-arm64-v8a}" in
+  arm64-v8a) NDK_TRIPLE=aarch64-linux-android ;;
+  x86_64) NDK_TRIPLE=x86_64-linux-android ;;
+  *) echo "Unsupported DROIDDECK_ABI: $DROIDDECK_ABI" >&2; exit 1 ;;
+esac
+CC="$TOOLCHAIN/${NDK_TRIPLE}${API}-clang"
 if [[ ! -x "$CC" ]]; then
   echo "Android NDK toolchain not found at $TOOLCHAIN" >&2
   exit 1
@@ -61,6 +66,10 @@ install -m755 "$WORK/proot/src/proot" "$OUTDIR/libproot.so"
 install -m755 "$WORK/proot/src/loader/loader" "$OUTDIR/libproot-loader.so"
 "$TOOLCHAIN/llvm-strip" --strip-unneeded "$OUTDIR/libproot.so"
 "$TOOLCHAIN/llvm-strip" --strip-unneeded "$OUTDIR/libproot-loader.so"
+if [[ -f "$WORK/proot/src/loader/loader-m32" ]]; then
+  install -m755 "$WORK/proot/src/loader/loader-m32" "$OUTDIR/libproot-loader32.so"
+  "$TOOLCHAIN/llvm-strip" --strip-unneeded "$OUTDIR/libproot-loader32.so"
+fi
 grep -q '^#define HAVE_SECCOMP_FILTER' "$WORK/proot/src/build.h" || { echo "ERROR: proot was built without seccomp acceleration"; exit 1; }
 grep -q '^#define HAVE_PROCESS_VM' "$WORK/proot/src/build.h" || { echo "ERROR: proot was built without process_vm"; exit 1; }
 NEEDED=$("$TOOLCHAIN/llvm-readelf" -d "$OUTDIR/libproot.so" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p' | tr '\n' ' ')
