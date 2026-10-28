@@ -169,6 +169,13 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
 - **Then** the web helper hits a tier0 assert as its Vulkan starts (`vulkandriverquery` too), and Steam shuts down about 10 s later. The same happens with gamescope's WSI layer off. Starting the helper through upstream's `droiddeck-x64-webhelper` wrapper was worse, so it is not used.
 - Steam uploads an anonymous minidump to Valve on each assert. That is the client's own behaviour, and no account is involved.
 
+## First install on the reference laptop (2026-10-28): fixed in runtime gb4
+
+On the laptop, Play Steam downloaded and unpacked gb3, then ended in `RUNTIME_INSTALL_FAILED`. The next try downloaded it all again.
+- **Cause:** the installer ends with `LinuxRuntime.isInstalled()`, which needs a session script already inside the runtime. Upstream's runtime carries its own; gb3 had none, so every complete install counted as failed, and the archive was deleted.
+- **Fix:** gb4 (`linuxfs-x86_64-gb4`, sha256 `0ab98a77…`) carries DroidDeck's session scripts. The catalog points at it, so no new APK is needed.
+- **Seen on the device, as expected:** Android refuses the runtime's hard links and the extractor copies those files instead (`avc: denied { link }`).
+
 ## Milestone 3: Steam's sign-in screen (host)
 
 The harness (`tools/googlebook/session-host-test.sh`) runs the real session on a Radeon 610M render node, and Steam reaches Big Picture's sign-in screen. The CEF pages are Steam Big Picture Mode, MainMenu, QuickAccess and `routes/login`, and a screenshot is in the owner's evidence. What it took:
