@@ -8,3 +8,5 @@ mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon vulkan-icd-loader lib32-vulkan
 libpulse lib32-libpulse alsa-lib lib32-alsa-lib pipewire
 gtk3 nss libxss lib32-libx11
 mangohud lib32-mangohud
+# 32-bit libraries Proton's 32-bit Wine loads when it runs without the Steam Linux Runtime container (gb5)
+lib32-freetype2 lib32-fontconfig lib32-libxcomposite lib32-libxrandr lib32-libxinerama lib32-libxcursor lib32-libxrender lib32-libxi
