@@ -1,0 +1,42 @@
+proot's seccomp mode decoded the first system call of a child forked by a 32-bit program as x86_64: get_abi()
+reads the registers saved at the previous sysenter, which a new child does not have. Its execve looked like munmap,
+the execve exit was not stopped at, and the 64-bit program started without its load script crashed (SIGSEGV).
+Steam's reaper is 32-bit and starts every game, so no game could start. Take the ABI from the stop's own registers.
+
+diff --git i/src/tracee/event.c w/src/tracee/event.c
+index b78fc75..7dc883d 100644
+--- i/src/tracee/event.c
++++ w/src/tracee/event.c
+@@ -594,6 +594,14 @@ int handle_tracee_event(Tracee *tracee, int tracee_status)
+ 			if (status < 0)
+ 				break;
+ 			tracee->regs_fresh = true;
++#if defined(ARCH_X86_64)
++			/* get_abi() reads the registers saved at the last sysenter, and a new child has none yet: the
++			 * first system call of a child forked by a 32-bit program was decoded as x86_64 (its execve as
++			 * munmap), so its sysexit was not stopped at and the 64-bit program it started crashed. This
++			 * stop is a sysenter, so the tracee's own segment registers give its ABI.  */
++			tracee->_regs[ORIGINAL].cs = tracee->_regs[CURRENT].cs;
++			tracee->_regs[ORIGINAL].ds = tracee->_regs[CURRENT].ds;
++#endif
+ 			flags = filtered_sysnum_flags(tracee, get_sysnum(tracee, CURRENT));
+ 
+ 			/* Use the common ptrace flow when
+diff --git i/src/tracee/seccomp.c w/src/tracee/seccomp.c
+index 2dc9f21..0272059 100644
+--- i/src/tracee/seccomp.c
++++ w/src/tracee/seccomp.c
+@@ -89,6 +89,13 @@ int handle_seccomp_event(Tracee* tracee)
+ 	/* Save regs so they can be restored at end of replaced call.  */
+ 	save_current_regs(tracee, ORIGINAL_SECCOMP_REWRITE);
+ 
++#if defined(ARCH_X86_64)
++	/* As for PTRACE_EVENT_SECCOMP: the ABI of this system call is the tracee's current one, which the
++	 * registers saved at an earlier sysenter do not give for a new child.  */
++	tracee->_regs[ORIGINAL].cs = tracee->_regs[CURRENT].cs;
++	tracee->_regs[ORIGINAL].ds = tracee->_regs[CURRENT].ds;
++#endif
++
+ 	/* X86 uses orig_rax when selecting syscall,
+ 	 * however at this point we are after syscall has been rejected
+ 	 * and orig_rax was reset to -1.  */
