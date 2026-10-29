@@ -33,7 +33,7 @@ Labels: **CONFIRMED** = measured on the reference laptop; **HYPOTHESIS** = not t
 | Part | Upstream | This fork |
 | --- | --- | --- |
 | APK ABI | `arm64-v8a` | `x86_64` |
-| proot | termux/proot plus 18 patches, arm64 | the same patches built for x86_64, plus proot's 32-bit loader for i386 programs |
+| proot | termux/proot plus 18 patches, arm64, from an add-on pack | the same patches built for x86_64, plus `tools/googlebook/proot-patches` and proot's 32-bit loader for i386 programs, inside the APK |
 | proot fast path | patches arm64 `svc #0` sites | off at first; an x86_64 `syscall` port later |
 | Linux runtime | Arch Linux ARM | Arch Linux x86_64 with multilib (proposed; it keeps upstream's pacman-based scripts) |
 | Steam client | Valve's arm64 client; an x86_64 client under FEX as an option | Valve's x86_64 `steamrt64` client, started directly (upstream's `droiddeck-steam-x64` flow, without FEX) |
@@ -57,7 +57,7 @@ NVIDIA's Linux driver is not part of this repository. It must match the device's
 | 0 | Feasibility on the device | native proot runs an x86_64 glibc system; both GPUs render inside it | **done** (below) |
 | 1 | x86_64 APK | `assembleRelease` makes an x86_64 APK; it installs and its front end opens | **done** (below), apart from seeing it on screen |
 | 2 | x86_64 runtime | a pinned Arch x86_64 runtime image with gamescope, its WSI layer, the preloads, mangoapp and pipewire, all x86_64; the app installs it and uses its proot instead of upstream's arm64 ones | **done**, apart from hosting the runtime (below) |
-| 3 | Steam on the Radeon | Steam Big Picture appears through the app's compositor on the Radeon | |
+| 3 | Steam on the Radeon | Steam Big Picture appears through the app's compositor on the Radeon | **done** on the reference laptop, 2026-10-28 (below) |
 | 4 | Controllers | Steam Input sees the controllers Steam supports as Steam sees them on SteamOS: buttons, rumble, and gyro and touchpad where the controller has them. Xbox, DualSense and 8BitDo controllers also work in emulators and other non-Steam apps. Keyboard, mouse and touch work | |
 | 5 | Games on the Radeon | a Proton game and a native Linux game run; fps recorded | |
 | 6 | Games on the NVIDIA GPU | the same games render on NVIDIA's driver and appear on screen; fps compared with the Radeon; the NVIDIA GPU powers down after the game exits | |
@@ -109,7 +109,7 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
 
 - **Runtime.** `tools/googlebook/build-runtime.sh` builds `linuxfs-x86_64.tar.zst` from the `archlinux:base` image and a dated Arch archive snapshot (`runtime.env`, 2026-10-27), with multilib. 391 MB compressed, 1.6 GB unpacked, 401 packages (`runtime-packages-x86_64.txt`):
   - Mesa 26.2.5 (RADV), Xwayland 24.1, PipeWire 1.6, MangoHud (mangoapp), Python 3.14, glibc 2.44, 32-bit Mesa and Vulkan;
-  - the x86_64 proot at `opt/android-host`, as in upstream's runtime;
+  - the x86_64 proot at `opt/android-host`, as in upstream's runtime (until gb4; the app now carries its own);
   - no NVIDIA files: the build refuses to package any.
 - **gamescope.** `tools/googlebook/build-gamescope.sh` builds gamescope 3.16.29 for x86_64 the way upstream does for arm64: Arch's packaging plus upstream's patches.
   - The two patches for the arm64 Steam client (0009, 0019) are left out.
@@ -129,7 +129,7 @@ GOOGLEBOOK_KEYSTORE=... GOOGLEBOOK_KEYSTORE_PASS_FILE=... tools/googlebook/sign-
 ## Milestone 2, second part: the app and Steam
 
 - **App, x86_64 builds only** (arm64 unchanged; `DeviceSupport.nativeX86()`):
-  - The patched proot (and its i386 loader) comes from the runtime's `opt/android-host`. No add-on pack is pinned, so nothing ARM is fetched.
+  - The patched proot (and its i386 loader) comes from the APK's native libraries (from the runtime's `opt/android-host` until 2026-10-28). No add-on pack is pinned, so nothing ARM is fetched.
   - The runtime catalog is a local file: `droiddeck-runtime-x86_64.json` in the app's external files directory (`Android/data/<package>/files/`). Its `url` may name an archive beside it, and the archive is still checked against the catalog's SHA-256.
   - No ARM64 Proton seed (Steam installs Valve's Proton), no FEX catalog, no non-Adreno warning.
   - RADV is the default Linux driver instead of the first ICD the runtime lists.
@@ -223,3 +223,19 @@ Run on 2026-10-28 on the reference laptop, from `adb shell` (not yet inside the 
 ## Licence
 
 GPL-3.0, as upstream. NVIDIA's driver binaries are not in this repository.
+
+## Milestone 3 on the reference laptop (2026-10-28)
+
+Steam's Deck UI runs in the app on the laptop's Radeon 890M. The owner signed in and started a game download. Three things stood in the way, none of them seen on the host:
+- **gamescope aborted at start.** Its Wayland backend draws window decorations with GTK, and GTK loads images through glycin, which sandboxes each decoder with `bwrap`. An Android app cannot create user namespaces, so every image failed. `GLYCIN_DISABLE_SANDBOX` did not help. The app now stages `droiddeck-bwrap-unavailable` as `/usr/bin/bwrap`, and it reports the missing namespaces in bwrap's own words. glycin then loads images without the sandbox ("Glycin running without sandbox").
+- **The Steam client crashed on `epoll_create`.** Android's x86_64 app seccomp policy blocks the system calls that have newer forms: `epoll_create`, `inotify_init`, `eventfd`, `signalfd`, `creat` and `readlink`. proot answered them `ENOSYS`.
+  - Under `run-as` and on the host there is no app seccomp filter, so only the app showed this.
+  - `tools/googlebook/proot-patches/0100` rewrites those calls to `epoll_create1`, `inotify_init1`, `eventfd2`, `signalfd4`, `openat` and `readlinkat`.
+  - proot and its loaders now ship in the APK (`build-apk.sh`), so proot fixes reach the laptop with an app update. The runtime build no longer adds its own copy, and installed gb4 runtimes keep working.
+- **Every GL window failed its swapchain.** The session forced Zink with Kopper's DRI2 path, which upstream needs because Adreno has no GL driver of its own. Under gamescope on the Radeon, Zink's swapchain failed with `VK_ERROR_OUT_OF_DEVICE_MEMORY` (Steam's update window, then its main window), and the client crashed with SIGSEGV. x86_64 sessions now leave the choice to Mesa, which picks radeonsi, as the host harness always did.
+
+Also fixed: the first runtime install no longer shows the "not an Adreno device" prompt, and `droiddeckctl` takes `DROIDDECK_USER` (the owner's apps run as Android user 10 on the laptop).
+
+**Open:**
+- gamescope's Wayland backend logs "Compositor released us but we were not acquired" about twice a second against the app's compositor. Nothing visible is wrong; the cause is not known yet.
+- Runtime updates still need the user to choose them. gb4 stays current, because the proot fix came with the app.
