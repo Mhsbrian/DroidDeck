@@ -7,10 +7,10 @@ import sys
 
 NOT_GAMES = frozenset((
     "228980", "1070560", "1391110", "1628350", "1493710", "3127680",
-    "4183110", "4185400", "4427310", "4628740",
+    "4183110", "4185400", "4427310", "4628710", "4628740",
 ))
 TOOL_DIR = re.compile(r"(steam ?linux ?runtime.*|proton.*|steamworks shared|fex|steamvr)", re.I)
-AUTOMATIC = ("", "droiddeck-direct", "droiddeck-fex", "droiddeck-proton-arm64", "droiddeck-proton-11-arm64")
+AUTOMATIC = ("", "droiddeck-direct", "droiddeck-fex", "droiddeck-proton", "droiddeck-proton-arm64", "droiddeck-proton-11-arm64")
 LINUX_TOOLS = ("droiddeck-direct", "droiddeck-fex")
 STATE = ".droiddeck-shared.json"
 LABELS = {"arm64": "ARM64 client games", "x86-64": "x86-64 client games"}

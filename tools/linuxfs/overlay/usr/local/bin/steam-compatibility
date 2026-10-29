@@ -24,6 +24,18 @@ SNIPER_APPID = "1628350"
 SLR4_APPID = "4183110"
 FEX_DEPENDENCIES = (FEX_APPID, SNIPER_APPID, SLR4_APPID)
 REQUIRED_TOOLS = (PROTON_ARM64_APPID,) + FEX_DEPENDENCIES
+# Googlebook x86_64 build: Valve's own x86-64 Proton, run the way upstream runs Valve's ARM64 Proton - straight from its
+# depot, without the Steam Linux Runtime container an Android app cannot create. Linux titles run natively; no FEX.
+NATIVE_X86 = os.uname().machine == "x86_64"
+if NATIVE_X86:
+    TOOL = "droiddeck-proton"
+    PROTON_X86_APPID = "4628710"
+    SOURCES = ("Proton 11.0", "Proton - Experimental", "Proton 10.0", "Proton 9.0 (Beta)")
+    OWN_TOOLS = ((TOOL, SOURCES),)
+    FEX_DEPENDENCIES = ()
+    REQUIRED_TOOLS = (PROTON_X86_APPID,)
+DEPOT_BIN = "bin" if NATIVE_X86 else "bin-arm64"
+CLIENT_DIR = "steamrt64" if NATIVE_X86 else "steamrtarm64"
 FULLY_INSTALLED = 4
 UPDATE_REQUIRED = 2
 REQUEST_HANDOFF_SECONDS = 30
@@ -419,9 +431,16 @@ LAUNCHER_TEMPLATE = LAUNCHER_SH
 
 
 def launcher_sh(sources=SOURCES):
-    return (LAUNCHER_TEMPLATE % " ".join('"%s"' % n for n in sources)).replace(
+    text = (LAUNCHER_TEMPLATE % " ".join('"%s"' % n for n in sources)).replace(
         "verb=$1; shift", "verb=$1; shift\n" + BL_DRIVER_QUERY_SKIP + BL_DESKTOP_GPU_SETUP + BL_DIRECTAUDIO_SETUP + BL_GAME_CPUS_SETUP + BL_IDTECH3_SETUP
         + BL_VACDIAG_SETUP + BL_COMPONENTS_SETUP + BL_LIBPATH_SETUP + BL_STORE_SETUP, 1)
+    if NATIVE_X86:
+        # The client's own library folders (its Steam Runtime builds) stay out of Wine's way, like steamrtarm64's.
+        text = text.replace("files/bin-arm64", "files/bin").replace(
+            "no ARM64 Proton depot yet", "no Proton depot yet").replace(
+            '"" | */steamrtarm64 | */steamrtarm64/*) ;;',
+            '"" | */steamrtarm64 | */steamrtarm64/* | */steamrt64 | */steamrt64/* | */ubuntu12_32 | */ubuntu12_64 | */steamrt-libs) ;;')
+    return text
 
 
 LAUNCHER_SH = launcher_sh()
@@ -722,6 +741,7 @@ NOT_GAMES = frozenset((
     "4183110",
     "4185400",
     "4427310",
+    "4628710",
     "4628740",
 ))
 
@@ -914,6 +934,12 @@ def valve_picks(steam_root):
     return sorted(picks, key=int)
 
 
+def own_display(depot):
+    if depot:
+        return display_name(os.path.basename(depot).replace(" (ARM64)", " ARM64"))
+    return display_name("Proton" if NATIVE_X86 else "Proton ARM64")
+
+
 def native_targets(steam_root, apps):
     wanted = {str(app) for app in apps if str(app) not in NOT_GAMES}
     if not wanted:
@@ -922,7 +948,7 @@ def native_targets(steam_root, apps):
     for app, (oslist, osarch, kind) in appinfo_platforms(os.path.join(steam_root, "appcache", "appinfo.vdf"), wanted).items():
         if kind not in PLAYABLE_TYPES or "linux" not in oslist:
             continue
-        if "arm64" in osarch or "aarch64" in osarch:
+        if NATIVE_X86 or "arm64" in osarch or "aarch64" in osarch:
             targets[app] = None
             continue
         if "windows" in oslist:
@@ -977,7 +1003,7 @@ def fex_wanted_marker():
 
 def request_app(steam_root, app):
     import subprocess
-    client = os.path.join(steam_root, "steamrtarm64", "steam")
+    client = os.path.join(steam_root, CLIENT_DIR, "steam")
     if not os.access(client, os.X_OK):
         return []
     try:
@@ -993,7 +1019,7 @@ def request_app(steam_root, app):
 
 
 def request_fex(steam_root, asked):
-    client = os.path.join(steam_root, "steamrtarm64", "steam")
+    client = os.path.join(steam_root, CLIENT_DIR, "steam")
     missing = fex_missing(steam_root)
     if not os.access(client, os.X_OK) or any(app in asked for app in missing):
         return []
@@ -1132,8 +1158,7 @@ def tool_catalog(steam_root, extras=None):
         depot = find_source(steam_root, sources)
         if depot is None and name != TOOL:
             continue
-        catalog.append(tool_entry(name, display_name(
-            os.path.basename(depot).replace(" (ARM64)", " ARM64") if depot else "Proton ARM64"), depot, True))
+        catalog.append(tool_entry(name, own_display(depot), depot, True))
     if extras is None:
         extras = {}
         try:
@@ -1516,7 +1541,7 @@ def find_source(steam_root, sources=SOURCES):
     """The first of `sources` the client has downloaded, newest across the libraries holding it."""
     for name in sources:
         found = [os.path.join(root, "steamapps", "common", name) for root in libraries(steam_root)
-                 if os.path.isdir(os.path.join(root, "steamapps", "common", name, "files", "bin-arm64"))]
+                 if os.path.isdir(os.path.join(root, "steamapps", "common", name, "files", DEPOT_BIN))]
         if found:
             return max(found, key=depot_build)
     return None
@@ -1530,8 +1555,7 @@ def build_tool(tool_dir, depot, sources=SOURCES, name=TOOL):
         shutil.rmtree(tool_dir)
     os.makedirs(tool_dir, exist_ok=True)
     write_changed(os.path.join(tool_dir, "toolmanifest.vdf"), TOOL_MANIFEST_VDF)
-    write_changed(os.path.join(tool_dir, "compatibilitytool.vdf"), COMPAT_TOOL_VDF % (name, display_name(
-        os.path.basename(depot).replace(" (ARM64)", " ARM64") if depot else "Proton ARM64")))
+    write_changed(os.path.join(tool_dir, "compatibilitytool.vdf"), COMPAT_TOOL_VDF % (name, own_display(depot)))
     write_changed(os.path.join(tool_dir, LAUNCHER), launcher_sh(sources), 0o755)
 
 
@@ -1631,9 +1655,10 @@ def main():
         build_tool(os.path.join(tools, name), depot, sources, name)
         print("steam-compatibility: registered %s (%s)" % (
             name, "depot %s present" % os.path.basename(depot) if depot else
-            "no ARM64 Proton depot yet; the session asks the client to fetch it"))
-    build_fex_tool(os.path.join(tools, FEX_TOOL))
-    print("steam-compatibility: registered %s" % FEX_TOOL)
+            "no Proton depot yet; the session asks the client to fetch it"))
+    if not NATIVE_X86:
+        build_fex_tool(os.path.join(tools, FEX_TOOL))
+        print("steam-compatibility: registered %s" % FEX_TOOL)
     extras = adopt_extras(tools)
     for name, directory in sorted(extras.items()):
         print("steam-compatibility: adopted %s as %s" % (directory, name))

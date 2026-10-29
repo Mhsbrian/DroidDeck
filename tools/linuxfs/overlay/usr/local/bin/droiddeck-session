@@ -647,10 +647,8 @@ case $mode in
     if [ "$steam_x64" = 0 ]; then
     step "registering the app's game library with Steam"
     droiddeck-steam-library "$steam_root" || true
-    if [ "$steam_native" = 0 ]; then
-    step "setting up the ARM64 Proton compatibility tool"
+    step "setting up the Proton compatibility tool"
     steam-compatibility "$steam_root" || true
-    fi
     if [ -z "${BL_DESKTOP:-}" ] && [ "${BL_STEAM_UI:-}" != desktop ]; then
       droiddeck-steam-ui-scale "$steam_root" "${BL_WIDTH:-1280}" "${BL_HEIGHT:-720}" || true
     fi
@@ -1251,7 +1249,7 @@ BUSCONF
                   [ -z "${_bl_x64_tool:-}" ] ||
                     BL_COMPAT_TOOL=$_bl_x64_tool steam-compatibility "$steam_root" --x64 --live >/dev/null 2>&1 || true
                   droiddeck-steam-x64 --map-direct --live >/dev/null 2>&1 || true
-                elif [ "$steam_native" = 0 ]; then
+                else
                   steam-compatibility "$steam_root" >/dev/null 2>&1 || true
                 fi
               fi
